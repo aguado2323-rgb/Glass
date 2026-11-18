@@ -67,9 +67,6 @@ class AddonClient(http: OkHttpClient) {
     /** Descarga el manifiesto de una dirección tal como la escribe o pega el usuario. */
     suspend fun install(input: String): InstalledAddon {
         val addr = parseAddonAddress(input) ?: throw IOException("la dirección no es válida. Debe ser el enlace del manifiesto del addon (termina en /manifest.json)")
-        // Las direcciones de addons suelen llevar dentro la clave del debrid: sin cifrar solo dentro de casa
-        if (addr.base.startsWith("http://", true) && !isLocalHost(addr.base.substringAfter("://").substringBefore('/').substringBeforeLast(':')))
-            throw IOException("la dirección empieza por http:// y viajaría sin cifrar (con tu clave dentro). Usa la dirección https:// del addon")
         val m = parseManifest(get(addr.base + "/manifest.json" + addr.query))
         if (m.id.isBlank() || m.resources.isEmpty()) throw IOException("eso no parece el manifiesto de un addon")
         return InstalledAddon(base = addr.base, manifest = m, query = addr.query)
@@ -159,11 +156,3 @@ fun parseAddonAddress(input: String): AddonAddress? {
     return AddonAddress(path, query)
 }
 
-/** localhost, .local o una IP de red privada (10.x, 172.16–31.x, 192.168.x): un addon montado en casa. */
-internal fun isLocalHost(host: String): Boolean {
-    val h = host.trim('[', ']').lowercase()
-    if (h == "localhost" || h.endsWith(".local") || h.endsWith(".lan") || h.endsWith(".home.arpa")) return true
-    val p = h.split('.').map { it.toIntOrNull() ?: return false }
-    if (p.size != 4) return false
-    return p[0] == 10 || p[0] == 127 || (p[0] == 192 && p[1] == 168) || (p[0] == 172 && p[1] in 16..31)
-}
