@@ -91,7 +91,12 @@ class RecordService : Service() {
 
         val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date(r.start))
         val safe = r.title.replace(Regex("[^\\p{L}\\p{N} _-]"), "").trim().take(60).ifBlank { "grabacion" }
-        val out = File(store.targetDir(if (r.storage >= 0) r.storage else app.settings.storageIndex), "${stamp}_$safe.ts")
+        val dir = store.targetDir(if (r.storage >= 0) r.storage else app.settings.storageIndex)
+        // Si ya existe un archivo con ese nombre (dos grabaciones del mismo programa a la misma hora), se usa otro:
+        // antes se añadía al final del anterior y quedaban dos grabaciones mezcladas en un mismo archivo
+        var out = File(dir, "${stamp}_$safe.ts")
+        var n = 2
+        while (out.exists() && out.absolutePath != r.file) out = File(dir, "${stamp}_${safe}_${n++}.ts")
         r = r.copy(status = Recording.STATUS_RECORDING, file = out.absolutePath, error = "")
         update(r)
 

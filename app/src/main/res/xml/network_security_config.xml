@@ -2,8 +2,12 @@
 <!--
   Solo se confía en los certificados del sistema (no en los instalados por el usuario),
   así una app o un proxy en la red no puede descifrar el tráfico HTTPS con la lista.
-  El tráfico sin cifrar se permite solo porque muchos proveedores redirigen los
-  streams a servidores HTTP; la conexión de inicio de sesión y la API van por HTTPS.
+  El tráfico sin cifrar se permite en general solo porque muchos proveedores IPTV
+  redirigen los streams a servidores HTTP.
+
+  Los servicios que reciben claves o tokens (debrid, TMDB, GitHub para las actualizaciones,
+  Stremio) van siempre cifrados: aunque una redirección intente bajar a http://, la conexión
+  se rechaza y la clave no viaja en claro.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
@@ -11,4 +15,24 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+
+    <domain-config cleartextTrafficPermitted="false">
+        <!-- Debrid -->
+        <domain includeSubdomains="true">real-debrid.com</domain>
+        <domain includeSubdomains="true">alldebrid.com</domain>
+        <domain includeSubdomains="true">premiumize.me</domain>
+        <domain includeSubdomains="true">torbox.app</domain>
+        <!-- Fichas y carátulas -->
+        <domain includeSubdomains="true">themoviedb.org</domain>
+        <domain includeSubdomains="true">tmdb.org</domain>
+        <!-- Actualizaciones -->
+        <domain includeSubdomains="true">github.com</domain>
+        <domain includeSubdomains="true">githubusercontent.com</domain>
+        <!-- Addons oficiales de Stremio -->
+        <domain includeSubdomains="true">strem.io</domain>
+        <domain includeSubdomains="true">stremio.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
 </network-security-config>
