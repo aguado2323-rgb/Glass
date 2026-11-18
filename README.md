@@ -1,0 +1,147 @@
+<div align="center">
+
+<img src="docs/banner.jpg" alt="Glass" width="640">
+
+**Visor's sister app, redesigned in the style of Apple TV.**
+Same features as [Visor](https://github.com/aguado2323-rgb/visor-iptv): live TV with a real guide, movies and series with full detail pages, recordings, and in-app updates, all for your own Xtream Codes subscription.
+
+[![Latest release](https://img.shields.io/github/v/release/aguado2323-rgb/glass?style=flat-square&label=download&color=111214)](https://github.com/aguado2323-rgb/glass/releases/latest)
+![Platform](https://img.shields.io/badge/platform-Fire%20TV%20%7C%20Android%20TV-111214?style=flat-square)
+![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-111214?style=flat-square)
+![Players](https://img.shields.io/badge/players-ExoPlayer%20%2B%20VLC-111214?style=flat-square)
+![Build](https://img.shields.io/github/actions/workflow/status/aguado2323-rgb/glass/build.yml?branch=main&style=flat-square&label=build)
+
+</div>
+
+---
+
+## Design
+
+Glass follows Apple's Human Interface Guidelines for tvOS, adapted to Fire TV and Android TV:
+
+- **Liquid Glass materials:** the tab bar, buttons, panels and dialogs are translucent glass with a soft sheen and a specular edge that catches the light, over a deep ambient background or the artwork itself.
+- **Focus, the tvOS way:** whatever has focus lifts toward you with a gentle spring, casts a shadow and gets a diagonal highlight. Focused buttons and rows turn white with black text, exactly like on Apple TV.
+- **Floating tab bar:** a centered glass capsule at the top, with the clock on the right.
+- **Typography:** SF Pro is licensed only for Apple platforms, so Glass bundles **Inter** (SIL Open Font License, see `docs/INTER-OFL.txt`), its closest open equivalent. Like SF Pro Text and SF Pro Display, Glass switches to *Inter Display* from 20 pt up.
+- **System colors:** tvOS dark and light palettes, secondary labels, and the system red, green and blue.
+
+Glass installs alongside Visor (different package, `com.glass.tv`), so you can keep both.
+
+## Why Glass
+
+Most IPTV apps on Fire TV are cluttered and slow. Glass focuses on what you use every night: your channels, the guide, and what's new to watch. It loads each folder only when you open it, caches everything on the device, and remembers where you were.
+
+## Features
+
+### Home
+- **Cinematic front page:** the newest movies and series rotate full screen with their artwork, title logo, details and synopsis. **▶ Play** starts right away, **More info** opens the detail page, **＋** adds it to your list. **← →** on the first or last button browses the rest.
+- **Rows that follow your focus:** press **↓** and the background and details switch to whatever you select, Apple TV style.
+- **Continue watching** with large thumbnails and progress: movies you left halfway and, for each series, the episode in progress or the next one. **OK** resumes at the exact second; **☰ Menu** opens the detail page or removes it.
+- **New movies** and **New series** rows.
+- Home is always dark, whatever theme you choose for the rest of the app.
+
+### Live TV
+- Channels grouped in your provider's folders, with what's on now from the EPG.
+- **Channel guide inside the player:** press **OK** or **←** while watching. It has two tabs, *This folder* and *Recent* (your last 15 channels), with progress bars and what's on next. **↑ ↓** zaps directly.
+- **Guide with a live window:** the programme info on the left and a small live TV on the right. Moving through the grid does not change channel (no extra load on your provider): **OK** puts that channel in the window, **OK** again goes full screen. Folders as pills, red "now" line and progress on what's on. **⏪ ⏩** change day, **⏯** jumps back to now.
+- **Pause and rewind live TV** (ExoPlayer): the channel is kept in memory, about 3 minutes in HD. **⏯** pauses, **⏪ ⏩** move 10 s, **● Live** jumps back. If a pause goes beyond the buffer, playback returns to live with a notice.
+- **Full guide:** Glass downloads your provider's complete XMLTV guide once a day, so the grid covers up to 4 days ahead (and the last 6 hours). Move by 2 hours or by day, or with **⏪ ⏩** on the remote. Press OK on a show to watch it if it's on, or to record it once, daily or weekly.
+- **Search the guide** by show name across all your channels ("when is the match on?").
+- Channels without guide data can still be browsed and played from the grid. If your provider has no XMLTV guide, Glass falls back to the short per-channel guide.
+- Favorite channels with **☰ Menu** on any channel.
+
+### Movies and series
+- Your provider's folders, plus **✦ Latest** (the 30 most recent additions) and **★ Favorites**.
+- **Search** across the whole list, not just one folder. It ignores accents and case and matches several words.
+- **Sort** any folder: recently added, oldest, release year (newest or oldest), A–Z or Z–A. Your choice is remembered.
+- **Cinematic detail pages** (always dark, artwork full screen) with two levels: the title on top; press **↓** for the rest.
+  - **Movies:** one big *Continue* button with the progress inside, plus *From the start*, *Trailer* and *My list*. Below: the full synopsis, credits (director, cast, original title, country, release, picture and sound) and **More from this folder**.
+  - **Series:** *Continue S2 · E3* or *Next S2 · E4*. Below: seasons as tabs and large episode cards with number, progress, duration and their own synopsis.
+- **Back returns to the same poster**, so you keep browsing where you were.
+- Artwork from your provider by default, or TMDB.
+
+### Discover (Stremio-compatible addons + debrid)
+- A separate **Discover** tab for movies and series that come from **Stremio/Nuvio-compatible addons** instead of your IPTV provider. Cinemeta (catalogs and detail pages only, no sources) is included; you add the source addons you already use.
+- Rows per addon catalog, search across every addon, **Continue watching** and **My list**, and detail pages with seasons, episodes and trailer.
+- **Debrid accounts:** Real-Debrid and AllDebrid connect with an on-screen code (no typing), Premiumize with its API key. Only torrents that are already **cached** in your debrid are played; nothing is left downloading in your account.
+- **Best source, automatically:** sources are ranked by your preferences (max quality, max size, Spanish audio first, hide CAM) and, if one fails, the player tries the next. **☰ Sources** lists them all if you prefer to pick.
+- **Add from your phone:** a small page served by the TV on your home network lets you paste an addon URL or a debrid key instead of typing it with the remote. It only runs while the dialog is open and asks for a 6-digit code shown on the TV.
+- External subtitles from addons, in both ExoPlayer and VLC.
+- Glass doesn't bundle or recommend any source addon: what you install, and whether it's legal where you live, is up to you.
+
+### Player
+- **ExoPlayer or VLC,** chosen separately for live TV and for movies, series and recordings. You can also switch on the fly if a stream misbehaves.
+- **Audio and subtitles panel** with every track the stream carries.
+- **Scrubbable timeline:** hold **→** and the step grows (10 s → 30 s → 1 min → 5 min). Release to jump there.
+- **Next episode** card with a 10-second countdown during the credits.
+- **Picture format:** fit, fill or zoom, for 4:3 channels or streams with black bars. Remembered for next time.
+
+### Recording
+- One-press **REC** while watching, from the guide, or with a **new timer**: pick any channel, then a show from its guide or exact hours, once, daily, weekdays or weekly, with start and end margins.
+- Choose where each recording is saved: internal storage or a USB drive. Each recording uses one extra connection to your provider.
+
+### Everything else
+- **Manage folders** for TV, movies and series: hide the ones you never use, reorder them, or lock them with the PIN. From **☰ Menu** on any folder, or all at once in *Settings → Folders*. Hidden and locked folders stay out of search, *Latest* and Home; locked ones close again when you leave the app.
+- **Automatic list refresh** every 6 h, 12 h or 24 h, plus *Refresh now*.
+- **In-app updates:** when a new release is published here, Glass offers it on launch and installs it with one click.
+- **Backup and restore** of favorites, progress, recent channels, settings and scheduled recordings.
+- **Dark** and **Light** themes, both with tvOS colors and glass materials.
+- **PIN lock** for Settings, or for the whole app.
+
+## Install on Fire TV
+
+**First time** (once, over ADB):
+
+1. On the Fire TV, open **Settings → My Fire TV → Developer options** and turn on **ADB debugging**. Note the IP address under **About → Network**.
+2. Download the APK from the [latest release](https://github.com/aguado2323-rgb/glass/releases/latest).
+3. Install it from your computer:
+   ```bash
+   adb connect <fire-tv-ip>:5555
+   adb install -r glass-x.y.z.apk
+   ```
+   Accept the prompt on the TV the first time.
+4. Open Glass and sign in with your provider's server (with port), username and password. You can also paste the full M3U link into the server field; Glass splits it for you.
+
+**After that,** updates arrive inside the app. The first time, Fire OS asks you to allow Glass to install apps; Glass takes you straight to that setting.
+
+## Security
+
+Your subscription details stay on your TV.
+
+- **Encrypted at rest:** server, username and password are encrypted with AES-256-GCM using a key held in the Android Keystore. The key can't be exported.
+- **No cloud backups:** app data is excluded from Android backup and device transfer. Glass's own backup file never contains your account.
+- **System certificates only:** a proxy or a user-installed certificate can't read HTTPS traffic.
+- **No URLs on disk or in logs:** stream URLs that contain credentials are built in memory at play time.
+- **Optional PIN** for Settings or for the whole app.
+- **Addons and debrid:** addon URLs (which often carry your keys) and debrid tokens are stored in the same encrypted vault, are never written to logs or error messages and are not part of the backup file.
+
+**Limits:** if your provider redirects streams to plain `http://`, that part isn't encrypted. Anyone with ADB access to the TV while the app is open could inspect its memory, so turn ADB off when you don't need it.
+
+## Build and release
+
+GitHub Actions builds the APK on every push to `main`. You can download it from the run's *Artifacts*.
+
+**Publishing a release:** create a release with a tag such as `v0.5.0` from `main`. The workflow builds it, attaches `glass-0.5.0.apk`, and every installed copy offers the update on next launch.
+
+| Repository secret | Purpose |
+|---|---|
+| `GLASS_KEYSTORE_B64`, `GLASS_KEYSTORE_PASSWORD` | Optional own signing key. Without it, Glass is signed with the fixed debug key in `app/debug.keystore`, so updates still install over the previous version |
+| `TMDB_API_KEY` | Optional: enables TMDB artwork |
+
+To build locally, open the folder in Android Studio and choose **Build → Build APK(s)**.
+
+### Under the hood
+
+Kotlin and Jetpack Compose · Media3 ExoPlayer · libVLC · OkHttp · kotlinx.serialization · Coil
+
+```
+app/src/main/java/com/glass/tv/
+├── data/     Xtream API and cache, encrypted vault, favorites, recents, backup, updater
+├── player/   ExoPlayer and VLC behind one interface, player UI, channel guide, seek bar
+├── record/   recording service, alarms, schedule
+└── ui/       theme, TV-focusable components, screens and detail pages
+```
+
+## Notes
+
+Glass is a player only. It doesn't include, sell or link to any channels or content, and you need your own subscription. Use it only with content you're allowed to watch. The interface is in Spanish.

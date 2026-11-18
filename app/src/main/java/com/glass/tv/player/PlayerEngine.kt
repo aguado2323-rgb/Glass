@@ -1,0 +1,78 @@
+package com.glass.tv.player
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import com.glass.tv.data.PlayItem
+
+data class Track(val id: String, val label: String, val selected: Boolean)
+
+/** Subtítulo que no viene dentro del vídeo: una dirección con un archivo SRT o VTT. */
+data class ExternalSub(val url: String, val lang: String, val label: String)
+
+/** Capa común para ExoPlayer y VLC: la interfaz del reproductor no sabe cuál está debajo. */
+interface PlayerEngine {
+    var onError: ((String) -> Unit)?
+    var onEnded: (() -> Unit)?
+
+    /** [subs]: subtítulos externos (de addons) que se añaden a los que traiga el propio vídeo. */
+    fun prepare(url: String, startMs: Long, isLive: Boolean, subs: List<ExternalSub> = emptyList())
+    fun togglePause()
+    fun isPlaying(): Boolean
+    fun seekBy(ms: Long)
+    fun position(): Long
+    fun duration(): Long
+    fun audioTracks(): List<Track>
+    fun subtitleTracks(): List<Track>
+    fun selectAudio(id: String)
+    /** null desactiva los subtítulos. */
+    fun selectSubtitle(id: String?)
+    fun release()
+
+    // ---- Pausar y rebobinar el directo (solo ExoPlayer, solo en el reproductor a pantalla completa) ----
+    /** true si este reproductor guarda el directo en memoria para pausarlo y rebobinarlo. */
+    val timeshift: Boolean get() = false
+    /** Cuánto va por detrás del directo (ms); 0 = en directo. */
+    fun liveDelayMs(): Long = 0
+    /** Cuánto se puede ir hacia atrás ahora mismo (ms). */
+    fun liveWindowMs(): Long = 0
+    /** Vuelve al directo. */
+    fun goLive() {}
+    /** Avisos para mostrar en pantalla ("volviendo al directo"…). */
+    var onNotice: ((String) -> Unit)?
+        get() = null
+        set(_) {}
+    /** Formato de imagen (ajustar, rellenar, zoom). */
+    fun setAspect(a: com.glass.tv.data.Aspect)
+
+    @Composable
+    fun VideoSurface(modifier: Modifier)
+}
+
+/** Cola de reproducción compartida (canales de la carpeta o episodios de la temporada). */
+class PlaybackQueue {
+    var items: List<PlayItem> = emptyList()
+        private set
+    var index: Int = 0
+
+    fun set(list: List<PlayItem>, start: Int) {
+        items = list
+        index = start.coerceIn(0, (list.size - 1).coerceAtLeast(0))
+    }
+
+    val current: PlayItem? get() = items.getOrNull(index)
+
+    fun move(delta: Int): PlayItem? {
+        if (items.isEmpty()) return null
+        index = (index + delta + items.size) % items.size
+        return current
+    }
+}
+
+internal fun langLabel(code: String?, fallback: String): String {
+    if (code.isNullOrBlank() || code == "und") return fallback
+    return try {
+        java.util.Locale(code).getDisplayLanguage(java.util.Locale("es")).replaceFirstChar { it.uppercase() }
+    } catch (e: Exception) {
+        code
+    }
+}

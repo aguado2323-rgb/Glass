@@ -1,0 +1,77 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths-ignore:
+      - "README.md"
+      - "docs/**"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Preparar firma
+        env:
+          KEYSTORE_B64: ${{ secrets.GLASS_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/glass.jks"
+            echo "GLASS_KEYSTORE_PATH=$RUNNER_TEMP/glass.jks" >> "$GITHUB_ENV"
+          else
+            echo "Sin keystore: se firmará con la clave de depuración"
+          fi
+
+      - name: Compilar
+        env:
+          GLASS_KEYSTORE_PASSWORD: ${{ secrets.GLASS_KEYSTORE_PASSWORD }}
+          GLASS_KEY_ALIAS: ${{ secrets.GLASS_KEY_ALIAS }}
+          GLASS_KEY_PASSWORD: ${{ secrets.GLASS_KEY_PASSWORD }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew --no-daemon assembleRelease 2>&1 | tee build.log || {
+            # Resumen del error como anotación, visible en la página de la ejecución
+            { grep -E "^e: " build.log | head -20; grep -E -A3 "What went wrong" build.log | head -8; } | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          }
+
+      - name: Nombrar el APK
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then V="${GITHUB_REF_NAME#v}"; V="${V//_/.}"; else V="0.1.$GITHUB_RUN_NUMBER"; fi
+          mkdir -p out
+          cp app/build/outputs/apk/release/*.apk "out/glass-$V.apk"
+          echo "APK_FILE=out/glass-$V.apk" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glass-apk
+          path: ${{ env.APK_FILE }}
+          if-no-files-found: error
+
+      # Con una etiqueta v* (o al publicar una release desde GitHub) se crea/completa la release con el APK
+      - name: Publicar release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.APK_FILE }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true

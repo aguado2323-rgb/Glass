@@ -1,0 +1,116 @@
+package com.glass.tv.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.glass.tv.ui.glassPanel
+import com.glass.tv.GlassApp
+import com.glass.tv.data.PlayItem
+import com.glass.tv.play
+import com.glass.tv.record.Recording
+import com.glass.tv.ui.Empty
+import com.glass.tv.ui.ListRow
+import com.glass.tv.ui.LocalPalette
+import com.glass.tv.ui.T
+import com.glass.tv.ui.TvButton
+import com.glass.tv.ui.Type
+
+private fun size(b: Long): String = when {
+    b >= 1L shl 30 -> "%.1f GB".format(b / (1L shl 30).toDouble())
+    b >= 1L shl 20 -> "%.0f MB".format(b / (1L shl 20).toDouble())
+    else -> ""
+}
+
+private fun kindLabel(r: Recording) = when (r.source) { "epg" -> "EPG"; "manual" -> "REC"; else -> "Temporizador" } +
+    when (r.repeat) { Recording.REPEAT_DAILY -> " · diario"; Recording.REPEAT_WEEKDAYS -> " · L-V"; Recording.REPEAT_WEEKLY -> " · semanal"; else -> "" }
+
+@Composable
+fun RecordingsScreen(app: GlassApp) {
+    val p = LocalPalette.current
+    val ctx = LocalContext.current
+    var action by remember { mutableStateOf<Recording?>(null) }
+    var pickChannel by remember { mutableStateOf(false) }
+
+    val all = app.recordings.items.toList()
+    val now = all.filter { it.status == Recording.STATUS_RECORDING }
+    val next = all.filter { it.status == Recording.STATUS_SCHEDULED }.sortedBy { it.start }
+    val done = all.filter { it.status in listOf(Recording.STATUS_DONE, Recording.STATUS_FAILED, Recording.STATUS_CANCELLED) }.sortedByDescending { it.start }
+
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            fun section(title: String, list: List<Recording>) {
+                item { T(title, Type.small, p.muted, Modifier.padding(start = 12.dp, top = 10.dp, bottom = 4.dp)) }
+                if (list.isEmpty()) item { T("Nada por aquí", Type.small, p.muted, Modifier.padding(start = 12.dp)) }
+                items(list, key = { it.id }) { r ->
+                    val sub = when (r.status) {
+                        Recording.STATUS_RECORDING -> "${r.channel} · hasta ${hm(r.end)} · ${size(r.bytes)}"
+                        Recording.STATUS_SCHEDULED -> "${r.channel} · ${dayHm(r.start)} – ${hm(r.end)}"
+                        Recording.STATUS_DONE -> "${r.channel} · ${dayHm(r.start)} · ${size(r.bytes)}"
+                        Recording.STATUS_FAILED -> "Falló: ${r.error}"
+                        else -> "Cancelada"
+                    }
+                    ListRow(
+                        title = r.title,
+                        subtitle = sub,
+                        trailing = kindLabel(r),
+                        dot = if (r.status == Recording.STATUS_RECORDING) p.rec else null,
+                        onClick = { action = r },
+                        onMenu = { action = r },
+                    )
+                }
+            }
+            section("Grabando ahora", now)
+            section("Programadas", next)
+            section("Grabadas", done)
+        }
+        Column(
+            Modifier.width(300.dp).glassPanel().padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            T("Nuevo temporizador", Type.h2)
+            T("Elige cualquier canal y luego un programa de su guía o las horas exactas, una vez o de forma periódica, y dónde guardarlo.", Type.small, p.muted, maxLines = 5)
+            TvButton("Programar grabación…", dot = p.rec, onClick = { pickChannel = true }, modifier = Modifier.fillMaxWidth())
+            val vol = app.recordings.volumes()
+            val v = vol.firstOrNull { it.index == app.settings.storageIndex } ?: vol.first()
+            T("Por defecto: ${v.label}" + (size(v.freeBytes).takeIf { it.isNotBlank() }?.let { " · $it libres" } ?: ""), Type.small, p.muted, maxLines = 2)
+            T("Puedes elegir otro sitio en cada grabación. Conecta una memoria USB si el espacio es poco.", Type.small, p.muted, maxLines = 3)
+        }
+    }
+
+    action?.let { r ->
+        val acts = buildList<Pair<String, () -> Unit>> {
+            when (r.status) {
+                Recording.STATUS_RECORDING -> add("Detener grabación" to { app.recordings.cancel(r.id) })
+                Recording.STATUS_SCHEDULED -> add("Cancelar grabación" to { app.recordings.cancel(r.id) })
+                Recording.STATUS_DONE -> {
+                    add("Reproducir" to {
+                        play(ctx, listOf(PlayItem(kind = "file", id = r.id.hashCode(), title = r.title, subtitle = r.channel, filePath = r.file)), 0)
+                    })
+                    add("Borrar" to { app.recordings.remove(r.id) })
+                }
+                else -> add("Quitar de la lista" to { app.recordings.remove(r.id) })
+            }
+            add("Cerrar" to {})
+        }
+        ActionsDialog(r.title, acts, onDismiss = { action = null }, subtitle = r.channel)
+    }
+
+    if (pickChannel) NewTimerDialog(app, onDismiss = { pickChannel = false })
+}

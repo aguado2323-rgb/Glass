@@ -1,0 +1,4 @@
+# Perfil de compilación anticipada: el código de Glass se compila a código nativo al instalar,
+# en vez de interpretarse las primeras veces. Las librerías (Compose, Media3…) traen el suyo.
+HSPLcom/glass/tv/**->**(**)**
+Lcom/glass/tv/**;
