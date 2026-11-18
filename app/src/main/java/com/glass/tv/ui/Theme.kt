@@ -114,12 +114,12 @@ fun withSystemFont(style: TextStyle): TextStyle {
 
 object Type {
     val title = TextStyle(fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp)
-    val tab = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    val tab = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium)
     val h2 = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
     val heading = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp)
-    val body = TextStyle(fontSize = 13.sp, lineHeight = 19.sp)
-    val label = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium)
-    val small = TextStyle(fontSize = 11.sp)
+    val body = TextStyle(fontSize = 14.sp, lineHeight = 20.sp)
+    val label = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    val small = TextStyle(fontSize = 12.sp, lineHeight = 16.sp)
 }
 
 @Composable

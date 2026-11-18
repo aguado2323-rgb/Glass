@@ -185,7 +185,7 @@ private fun FilterPill(text: String, selected: Boolean, focusRequester: FocusReq
                 .background(if (focused) Color.White else if (selected) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f))
                 .padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
-            T(text, Type.label.copy(fontSize = 12.5.sp), if (focused) Color.Black else Color.White.copy(alpha = if (selected) 1f else 0.82f))
+            T(text, Type.label.copy(fontSize = 13.5.sp), if (focused) Color.Black else Color.White.copy(alpha = if (selected) 1f else 0.82f))
         }
     }
 }
@@ -243,7 +243,7 @@ fun DiscoverScreen(app: GlassApp, nav: Nav) = CompositionLocalProvider(LocalPale
                     } else {
                         T(focused?.let { it.name + "  ·  " + it.line() } ?: "≡ sobre un póster lo quita de la lista", Type.small, Color(0xD9FFFFFF), Modifier.padding(start = 48.dp, top = 4.dp, bottom = 10.dp))
                         // Lo último guardado, primero
-                        MetaGrid(app, nav, saved.reversed(), "disc:mine", Modifier.fillMaxSize(), PaddingValues(start = 48.dp, end = 48.dp, top = 6.dp, bottom = 28.dp)) { focused = it }
+                        MetaGrid(app, nav, saved.reversed(), "disc:mine", Modifier.fillMaxSize(), PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 28.dp)) { focused = it }
                     }
                 }
             } else {
@@ -261,14 +261,14 @@ fun DiscoverScreen(app: GlassApp, nav: Nav) = CompositionLocalProvider(LocalPale
                                 app.tmdb.briefByImdb(f.id.substringBefore(':'), f.isSeries)?.overview?.ifBlank { null } ?: f.description
                             } else f.description
                         }
-                        plot?.takeIf { it.isNotBlank() }?.let { T(it, Type.body.copy(fontSize = 12.5.sp, lineHeight = 18.sp), Color(0xE6FFFFFF), Modifier.padding(top = 6.dp), maxLines = 2) }
+                        plot?.takeIf { it.isNotBlank() }?.let { T(it, Type.body.copy(fontSize = 13.5.sp, lineHeight = 18.sp), Color(0xE6FFFFFF), Modifier.padding(top = 6.dp), maxLines = 2) }
                     } else {
                         T("DESCUBRIR", EYEBROW, Color(0xB3FFFFFF))
                         T("Películas y series de tus addons", BIG_TITLE.copy(fontSize = 28.sp, lineHeight = 32.sp), Color.White, Modifier.padding(top = 4.dp))
                         T(
                             if (d.hasStreamAddon) "Elige un título para ver su ficha y sus fuentes."
                             else "Los catálogos ya se pueden recorrer. Para reproducir, añade un addon de fuentes y tu cuenta debrid en «Addons y debrid».",
-                            Type.body.copy(fontSize = 12.5.sp, lineHeight = 18.sp), Color(0xE6FFFFFF), Modifier.padding(top = 6.dp), maxLines = 2,
+                            Type.body.copy(fontSize = 13.5.sp, lineHeight = 18.sp), Color(0xE6FFFFFF), Modifier.padding(top = 6.dp), maxLines = 2,
                         )
                     }
                 }
@@ -413,7 +413,7 @@ private fun MetaRow(
 
 /** Cuadrícula de carátulas de Descubrir (resultados de búsqueda, favoritos). */
 @Composable
-fun MetaGrid(app: GlassApp, nav: Nav, list: List<MetaPreview>, prefix: String, modifier: Modifier = Modifier, padding: PaddingValues = PaddingValues(6.dp), onFocus: ((MetaPreview) -> Unit)? = null) {
+fun MetaGrid(app: GlassApp, nav: Nav, list: List<MetaPreview>, prefix: String, modifier: Modifier = Modifier, padding: PaddingValues = GRID_PADDING, onFocus: ((MetaPreview) -> Unit)? = null) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(104.dp),
         modifier = modifier,
@@ -424,6 +424,7 @@ fun MetaGrid(app: GlassApp, nav: Nav, list: List<MetaPreview>, prefix: String, m
         items(list, key = { it.key }) { m ->
             val k = "$prefix:${m.key}"
             Poster(
+                modifier = Modifier.fillMaxWidth(),
                 url = m.poster, title = m.name,
                 subtitle = listOfNotNull(
                     if (app.favorites.containsRef(m.key)) "★" else null,
@@ -488,7 +489,7 @@ private fun DiscoverSearch(app: GlassApp, nav: Nav) {
                 when {
                     list == null -> T("Escribe al menos dos letras. Se busca en todos tus addons con catálogo.", Type.body, MUTED)
                     list.isEmpty() -> T("Sin resultados para «$q».", Type.body, MUTED)
-                    else -> MetaGrid(app, nav, list, "disc:q", Modifier.fillMaxSize(), PaddingValues(top = 6.dp, bottom = 28.dp, start = 4.dp, end = 4.dp))
+                    else -> MetaGrid(app, nav, list, "disc:q", Modifier.fillMaxSize(), PaddingValues(top = 16.dp, bottom = 28.dp, start = 12.dp, end = 12.dp))
                 }
             }
         }

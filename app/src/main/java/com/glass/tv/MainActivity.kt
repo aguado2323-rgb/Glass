@@ -1,6 +1,8 @@
 package com.glass.tv
 
 import androidx.compose.foundation.focusGroup
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.foundation.horizontalScroll
 import android.content.Context
 import android.content.Intent
@@ -229,6 +231,13 @@ private fun TabsScaffold(app: GlassApp, nav: Nav) {
         while (true) { delay(20_000); value = clock() }
     }
     var tabsFocused by remember { mutableStateOf(true) }
+    // Como en tvOS, la pestaña enfocada se abre sola, pero con un instante de espera: al recorrer la barra deprisa
+    // no se montan por el camino la Guía, Descubrir… (en un Fire TV eso hacía que el foco fuera a tirones).
+    var focusedTab by remember { mutableStateOf<Tab?>(null) }
+    LaunchedEffect(focusedTab) {
+        val t = focusedTab ?: return@LaunchedEffect
+        if (t != nav.tab) { delay(TAB_SWITCH_DELAY_MS); nav.tab = t }
+    }
     // Al volver de una ficha, el foco lo recupera el elemento del catálogo; si no, va a las pestañas.
     LaunchedEffect(Unit) {
         if (nav.returnKey != null) {
@@ -296,7 +305,7 @@ private fun TabsScaffold(app: GlassApp, nav: Nav) {
                         .padding(4.dp)
                         // Solo se desplaza si no cabe (por ejemplo, con la ventana de un canal abierta)
                         .horizontalScroll(androidx.compose.foundation.rememberScrollState())
-                        .onFocusChanged { tabsFocused = it.hasFocus }
+                        .onFocusChanged { tabsFocused = it.hasFocus; if (!it.hasFocus) focusedTab = null }
                         // Al subir desde el contenido se vuelve a la pestaña en la que estás, no a la más cercana
                         .focusProperties { enter = { firstTab } }
                         .focusGroup(),
@@ -304,13 +313,18 @@ private fun TabsScaffold(app: GlassApp, nav: Nav) {
                     Tab.entries.forEach { t ->
                         val active = t == nav.tab
                         Focusable(
-                            onClick = { nav.tab = t },
-                            onFocused = { nav.tab = t },
+                            onClick = { focusedTab = t; nav.tab = t },
+                            onFocused = { focusedTab = t },
                             focusRequester = if (active) firstTab else null,
                             liftOnFocus = 1.06f,
                             // En Inicio, ↓ desde el menú va primero a los puntos de las novedades (← → las cambian)
                             modifier = Modifier.onPreviewKeyEvent { e ->
-                                if (e.key != Key.DirectionDown || nav.tab != Tab.HOME || !homeFocus.dotsReady) false
+                                // ↓ antes de que la pestaña enfocada se haya abierto: la abre ya y el foco se queda en
+                                // el menú (si no, bajaría al contenido de la pestaña anterior, que está a punto de irse)
+                                if (e.key == Key.DirectionDown && t != nav.tab) {
+                                    if (e.type == KeyEventType.KeyDown) { focusedTab = t; nav.tab = t }
+                                    true
+                                } else if (e.key != Key.DirectionDown || nav.tab != Tab.HOME || !homeFocus.dotsReady) false
                                 else {
                                     if (e.type == KeyEventType.KeyDown) try { homeFocus.dots.requestFocus() } catch (_: Exception) { }
                                     true
@@ -321,10 +335,10 @@ private fun TabsScaffold(app: GlassApp, nav: Nav) {
                             Box(
                                 Modifier
                                     .background(if (focused) hp.focusBg else if (active) hp.text.copy(alpha = 0.16f) else Color.Transparent)
-                                    .padding(horizontal = 14.dp, vertical = 7.dp)
+                                    .padding(horizontal = 12.dp, vertical = 7.dp)
                             ) {
                                 T(
-                                    t.label, Type.tab.copy(fontSize = 13.sp, fontWeight = if (active || focused) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
+                                    t.label, Type.tab.copy(fontSize = 14.sp, fontWeight = if (active || focused) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
                                     if (focused) hp.focusText else if (active) hp.text else hp.text.copy(alpha = 0.66f),
                                 )
                             }
@@ -339,8 +353,8 @@ private fun TabsScaffold(app: GlassApp, nav: Nav) {
                 ) {
                     mini?.let { m ->
                         val ctx = androidx.compose.ui.platform.LocalContext.current
-                        TvButton("⛶ ${m.title}", onClick = { MiniPlayer.expand(ctx) })
-                        TvButton("✕", onClick = { MiniPlayer.stop() })
+                        TvButton(m.title, onClick = { MiniPlayer.expand(ctx) }, icon = androidx.compose.material.icons.Icons.Filled.PlayArrow)
+                        TvButton("", onClick = { MiniPlayer.stop() }, icon = androidx.compose.material.icons.Icons.Filled.Close, description = "Cerrar la ventana")
                     }
                     T(now, Type.label.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), hp.text)
                 }
@@ -374,6 +388,9 @@ private fun tabHint(t: Tab): String = when (t) {
     Tab.SETTINGS -> "Aspecto, reproducción, cuenta, Descubrir y copia de seguridad"
     else -> ""
 }
+
+/** Espera antes de abrir la pestaña enfocada en la barra. */
+private const val TAB_SWITCH_DELAY_MS = 220L
 
 /** Alto fijo del menú de pestañas: el contenido empieza siempre a la misma altura. */
 private val HEADER_H = 64.dp

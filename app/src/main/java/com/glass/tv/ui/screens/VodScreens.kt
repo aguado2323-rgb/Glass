@@ -104,17 +104,24 @@ fun MoviesScreen(app: GlassApp, nav: Nav) {
     }
 }
 
+/**
+ * Margen de las cuadrículas de carátulas: deja sitio a la carátula enfocada, que crece un 9 % y proyecta sombra,
+ * para que no se corte contra el borde de la lista.
+ */
+internal val GRID_PADDING = PaddingValues(horizontal = 12.dp, vertical = 16.dp)
+
 @Composable
 fun MovieGrid(app: GlassApp, nav: Nav, list: List<VodStream>) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(104.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(6.dp),
+        contentPadding = GRID_PADDING,
     ) {
         items(list, key = { it.id }) { v ->
             val key = "vod:${v.id}"
             Poster(
+                modifier = Modifier.fillMaxWidth(),
                 url = v.icon,
                 title = v.name,
                 subtitle = listOfNotNull(
@@ -175,11 +182,12 @@ fun SeriesGrid(app: GlassApp, nav: Nav, list: List<SeriesItem>) {
         columns = GridCells.Adaptive(104.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(6.dp),
+        contentPadding = GRID_PADDING,
     ) {
         items(list, key = { it.id }) { s ->
             val key = "series:${s.id}"
             Poster(
+                modifier = Modifier.fillMaxWidth(),
                 url = s.cover,
                 title = s.name,
                 subtitle = listOfNotNull(

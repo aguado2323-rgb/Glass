@@ -1,5 +1,10 @@
 package com.glass.tv.ui.screens
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
@@ -200,7 +205,7 @@ private fun HomeBackdrop(art: HomeArt?, lowerFrac: Float) {
 
 /** Botón secundario en píldora ("Más información"). */
 @Composable
-private fun PillAction(text: String, canFocus: Boolean, focusRequester: FocusRequester? = null, onFocused: () -> Unit = {}, onClick: () -> Unit) {
+private fun PillAction(text: String, canFocus: Boolean, focusRequester: FocusRequester? = null, icon: ImageVector? = null, onFocused: () -> Unit = {}, onClick: () -> Unit) {
     Focusable(
         onClick = onClick,
         onFocused = onFocused,
@@ -209,8 +214,15 @@ private fun PillAction(text: String, canFocus: Boolean, focusRequester: FocusReq
         scaleOnFocus = true,
         modifier = Modifier.focusProperties { this.canFocus = canFocus },
     ) { focused ->
-        Box((if (focused) Modifier.background(Color.White) else Modifier.glass(RoundedCornerShape(50))).padding(horizontal = 18.dp, vertical = 10.dp)) {
-            T(text, Type.label.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), if (focused) Color.Black else Color.White)
+        val fg = if (focused) Color.Black else Color.White
+        Row(
+            (if (focused) Modifier.background(Color.White) else Modifier.glass(RoundedCornerShape(50)))
+                .padding(horizontal = if (text.isEmpty()) 12.dp else 18.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (icon != null) androidx.compose.material3.Icon(icon, contentDescription = text.ifEmpty { null }, tint = fg, modifier = Modifier.size(20.dp))
+            if (text.isNotEmpty()) T(text, Type.label.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), fg)
         }
     }
 }
@@ -333,13 +345,13 @@ fun HomeScreen(app: GlassApp, nav: Nav, homeFocus: HomeFocus) = CompositionLocal
                                 }
                             }
                         }
-                        PillAction("ⓘ  Más información", !lower, rememberReturnFocus(nav, "home:hero"), onFocused = { btnIdx = 1 }) {
+                        PillAction("Más información", !lower, rememberReturnFocus(nav, "home:hero"), icon = Icons.Outlined.Info, onFocused = { btnIdx = 1 }) {
                             when (cur) {
                                 is VodStream -> nav.open(Route.Movie(cur), "home:hero")
                                 is SeriesItem -> nav.open(Route.Show(cur), "home:hero")
                             }
                         }
-                        PillAction(if (isFav) "★" else "＋", !lower, onFocused = { btnIdx = 2 }) {
+                        PillAction("", !lower, icon = if (isFav) Icons.Filled.Check else Icons.Filled.Add, onFocused = { btnIdx = 2 }) {
                             when (cur) {
                                 is VodStream -> app.favorites.toggle(cur.toFav())
                                 is SeriesItem -> app.favorites.toggle(cur.toFav())
@@ -431,7 +443,7 @@ fun HomeScreen(app: GlassApp, nav: Nav, homeFocus: HomeFocus) = CompositionLocal
                             if (ra.meta.isNotBlank()) T(ra.meta, META.copy(fontSize = 12.sp), Color(0xD9FFFFFF))
                             ra.age?.let { Tag(it) }
                         }
-                        T(ra.plot.ifBlank { " " }, Type.body.copy(fontSize = 12.5.sp, lineHeight = 18.sp), Color(0xE6FFFFFF), Modifier.padding(top = 6.dp), maxLines = 2, minLines = 2)
+                        T(ra.plot.ifBlank { " " }, Type.body.copy(fontSize = 13.5.sp, lineHeight = 18.sp), Color(0xE6FFFFFF), Modifier.padding(top = 6.dp), maxLines = 2, minLines = 2)
                     }
                     Column(Modifier.onSizeChanged { blockH = with(density) { it.height.toDp() } }) {
                         // Rótulo con pistas de las otras filas

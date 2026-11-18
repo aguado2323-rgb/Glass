@@ -44,6 +44,7 @@ import com.glass.tv.data.SeriesItem
 import com.glass.tv.data.VodStream
 import com.glass.tv.play
 import com.glass.tv.ui.Focusable
+import com.glass.tv.ui.GlassSheen
 import com.glass.tv.ui.Img
 import com.glass.tv.ui.LocalPalette
 import com.glass.tv.ui.T
@@ -199,16 +200,16 @@ fun ContinueRow(
                 ) { focused ->
                     Box(
                         Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-                            .border(if (focused) 3.dp else 0.dp, if (focused) Color.White else Color.Transparent, RoundedCornerShape(10.dp))
                     ) {
                         Img(c.image, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
+                        if (focused) GlassSheen(RoundedCornerShape(10.dp))
                         if (c.frac > 0f) {
                             Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth().height(3.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.3f))) {
                                 Box(Modifier.fillMaxWidth(c.frac.coerceIn(0f, 1f)).height(3.dp).background(Color.White))
                             }
                         } else if (c.episode != null) {
                             Box(Modifier.align(Alignment.TopStart).padding(7.dp).clip(RoundedCornerShape(4.dp)).background(Color.White).padding(horizontal = 6.dp, vertical = 1.dp)) {
-                                T("NUEVO EPISODIO", Type.small.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold), Color.Black)
+                                T("NUEVO EPISODIO", Type.small.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp), Color.Black)
                             }
                         }
                     }
