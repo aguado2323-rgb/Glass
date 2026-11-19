@@ -33,6 +33,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.glass.tv.ui.glassPanel
+import com.glass.tv.ui.glass
+import androidx.compose.ui.unit.sp
 import com.glass.tv.Nav
 import com.glass.tv.GlassApp
 import com.glass.tv.data.Account
@@ -51,10 +53,24 @@ import java.util.Locale
 
 // ---------------- Inicio de sesión ----------------
 
+/** Formas de dar de alta la lista en la primera pantalla. */
+private enum class LoginMode(val label: String) { URL("Enlace completo"), FIELDS("Servidor y usuario"), PHONE("Desde el móvil o el PC") }
+
+/** Lee "servidor / usuario / contraseña" (uno por línea) o un enlace completo; null si no se reconoce. */
+internal fun parseListInput(text: String): Account? {
+    val t = text.trim()
+    parseXtreamLink(t)?.let { return it }
+    val lines = t.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    if (lines.size >= 3 && lines[0].startsWith("http")) return Account(baseOf(lines[0]), lines[1], lines[2])
+    return null
+}
+
 @Composable
 fun LoginScreen(app: GlassApp) {
     val p = LocalPalette.current
     val scope = rememberCoroutineScope()
+    var mode by remember { mutableStateOf(LoginMode.URL) }
+    var link by remember { mutableStateOf("") }
     var server by remember { mutableStateOf("https://") }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
@@ -82,34 +98,118 @@ fun LoginScreen(app: GlassApp) {
         )
     }
 
+    /** Comprueba la cuenta con el proveedor y la guarda; devuelve el mensaje de error o null si entró. */
+    suspend fun tryLogin(a: Account): String? {
+        if (!a.server.startsWith("http")) return "El servidor debe empezar por http:// o https://"
+        if (a.user.isBlank() || a.pass.isBlank()) return "Faltan el usuario o la contraseña."
+        return try {
+            app.repo.login(Account(baseOf(a.server), a.user.trim(), a.pass)); null
+        } catch (e: Exception) {
+            "No se pudo entrar: ${e.message ?: "error de conexión"}"
+        }
+    }
+
+    fun submit(a: Account?) {
+        if (busy) return
+        if (a == null) { error = "No encuentro el usuario y la contraseña en ese enlace. Debe ser del tipo http://servidor:puerto/get.php?username=…&password=…"; return }
+        busy = true; error = null
+        scope.launch { try { error = tryLogin(a) } finally { busy = false } }
+    }
+
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(Modifier.width(480.dp).glassPanel().padding(32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            T("Glass", Type.title)
-            T("Introduce los datos Xtream de tu proveedor, o pega en Servidor el enlace M3U completo y se rellenan solos. Se guardan cifrados en este aparato.", Type.small, p.muted, maxLines = 3)
-            field("Servidor o enlace M3U", server, { v ->
-                val t = v.trim()
-                val parsed = parseXtreamLink(t)
-                if (parsed != null) { server = parsed.server; user = parsed.user; pass = parsed.pass } else server = t
-            })
-            field("Usuario", user, { user = it.trim() })
-            field("Contraseña", pass, { pass = it }, password = true)
-            if (error != null) T(error!!, Type.small, p.rec, maxLines = 3)
-            TvButton(if (busy) "Comprobando…" else "Entrar", focusRequester = first, onClick = {
-                if (busy) return@TvButton
-                if (!server.startsWith("http")) { error = "El servidor debe empezar por http:// o https://"; return@TvButton }
-                if (!server.startsWith("https://")) error = "Aviso: sin https, la contraseña viaja sin cifrar."
-                busy = true
-                scope.launch {
-                    try {
-                        app.repo.login(Account(baseOf(server), user, pass))
-                    } catch (e: Exception) {
-                        error = "No se pudo entrar: ${e.message ?: "error de conexión"}"
-                    } finally {
-                        busy = false
+        Column(Modifier.width(560.dp).glassPanel().padding(32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            T("Bienvenido a Glass", Type.title)
+            T("Añade tu lista de IPTV. Se guarda cifrada en este aparato.", Type.body, p.muted, maxLines = 2)
+            // Control segmentado de tvOS: cambia la forma de introducir la lista
+            Row(Modifier.glass(RoundedCornerShape(50)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                LoginMode.entries.forEach { m ->
+                    com.glass.tv.ui.Focusable(
+                        onClick = { mode = m; error = null },
+                        onFocused = { mode = m; error = null },
+                        shape = RoundedCornerShape(50),
+                        focusRequester = if (m == LoginMode.URL) first else null,
+                    ) { focused ->
+                        Box(
+                            Modifier
+                                .background(if (focused) p.focusBg else if (m == mode) p.text.copy(alpha = 0.16f) else androidx.compose.ui.graphics.Color.Transparent)
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            T(m.label, Type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), if (focused) p.focusText else if (m == mode) p.text else p.muted)
+                        }
                     }
                 }
-            })
+            }
+            when (mode) {
+                LoginMode.URL -> {
+                    T("Pega el enlace que te dio tu proveedor (M3U o get.php). El usuario y la contraseña se sacan de él.", Type.small, p.muted, maxLines = 2)
+                    field("Enlace de la lista", link, { link = it.trim() })
+                    TvButton(if (busy) "Comprobando…" else "Entrar", onClick = { submit(parseListInput(link)) })
+                }
+                LoginMode.FIELDS -> {
+                    field("Servidor (http://servidor:puerto)", server, { v ->
+                        val t = v.trim()
+                        val parsed = parseXtreamLink(t)
+                        if (parsed != null) { server = parsed.server; user = parsed.user; pass = parsed.pass } else server = t
+                    })
+                    field("Usuario", user, { user = it.trim() })
+                    field("Contraseña", pass, { pass = it }, password = true)
+                    TvButton(if (busy) "Comprobando…" else "Entrar", onClick = { submit(Account(server, user, pass)) })
+                }
+                LoginMode.PHONE -> PhoneLogin(onAccount = { a -> tryLogin(a)?.let { throw IllegalArgumentException(it) } ?: "Lista añadida. Ya puedes usar la tele." })
+            }
+            if (error != null) T(error!!, Type.small, p.rec, maxLines = 3)
+            val insecure = (mode == LoginMode.FIELDS && server.startsWith("http://")) || (mode == LoginMode.URL && link.startsWith("http://"))
+            if (insecure) T("Aviso: sin https, la contraseña viaja sin cifrar.", Type.small, p.muted)
         }
+    }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(50); try { first.requestFocus() } catch (_: Exception) { } }
+}
+
+/** La tele abre una página en la red de casa: desde el móvil o el PC se pega el enlace o los datos de la lista. */
+@Composable
+private fun PhoneLogin(onAccount: suspend (Account) -> String) {
+    val p = LocalPalette.current
+    var locked by remember { mutableStateOf(false) }
+    val server = remember {
+        com.glass.tv.addons.PairServer(
+            listOf(
+                "url" to "Enlace completo de la lista (M3U o get.php)",
+                "fields" to "Servidor, usuario y contraseña (uno por línea)",
+            ),
+            onSubmit = { what, value ->
+                val a = (if (what == "url") parseXtreamLink(value.trim()) else parseListInput(value))
+                    ?: throw IllegalArgumentException(
+                        if (what == "url") "No encuentro el usuario y la contraseña en ese enlace."
+                        else "Escribe el servidor (con http:// o https://), el usuario y la contraseña, cada uno en su línea."
+                    )
+                onAccount(a)
+            },
+            intro = "Añade tu lista de IPTV a la tele. Se guarda cifrada en ella.",
+            valueLabel = "Enlace, o servidor, usuario y contraseña",
+        )
+    }
+    val address = remember { server.start() }
+    androidx.compose.runtime.DisposableEffect(server) {
+        server.onLocked = { locked = true }
+        onDispose { server.stop() }
+    }
+    if (address == null) {
+        T("La tele no parece estar conectada a una red local. Usa una de las otras dos opciones.", Type.body, p.rec, maxLines = 3)
+    } else {
+        T("Con el móvil o el PC en la misma red, abre en el navegador:", Type.body, p.muted)
+        LoginBigText(address.removePrefix("http://"))
+        T("y escribe este código:", Type.body, p.muted)
+        LoginBigText(server.code)
+        T("Úsalo solo en la red de tu casa. La página se cierra al entrar o al salir de aquí.", Type.small, p.muted, maxLines = 2)
+        if (locked) T("Demasiados códigos equivocados: la página se ha cerrado. Cambia de opción y vuelve a esta.", Type.small, p.rec, maxLines = 2)
+    }
+}
+
+@Composable
+internal fun LoginBigText(text: String) {
+    val p = LocalPalette.current
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(p.bg.copy(alpha = 0.6f)).padding(vertical = 12.dp, horizontal = 16.dp)) {
+        T(text, Type.title.copy(fontSize = 26.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = 2.sp), maxLines = 2)
     }
 }
 
@@ -167,6 +267,7 @@ fun SettingsScreen(app: GlassApp, nav: Nav) {
     var confirmLogout by remember { mutableStateOf(false) }
     val backup = remember { com.glass.tv.data.Backup(app) }
     var toRestore by remember { mutableStateOf<com.glass.tv.data.BackupData?>(null) }
+    var pairBackup by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
     var foldersOpen by remember { mutableStateOf(false) }
     if (foldersOpen) FolderManagerDialog(app) { foldersOpen = false }
@@ -317,9 +418,16 @@ fun SettingsScreen(app: GlassApp, nav: Nav) {
                 onClick = {
                     scope.launch {
                         val d = backup.peek()
-                        if (d == null) msg = "No se encontró ninguna copia (${com.glass.tv.data.Backup.FILE_NAME})." else toRestore = d
+                        if (d == null) msg = "No se encontró ninguna copia en este aparato. Prueba desde el móvil o el PC." else toRestore = d
                     }
                 },
+            )
+        }
+        item {
+            ListRow(
+                "Copia desde el móvil o el PC",
+                subtitle = "Descarga la copia o restaura una de Glass o de Visor desde el navegador",
+                onClick = { pairBackup = true },
             )
         }
         item { T("Aplicación", Type.small, p.muted, Modifier.padding(start = 12.dp, top = 12.dp, bottom = 4.dp)) }
@@ -357,6 +465,8 @@ fun SettingsScreen(app: GlassApp, nav: Nav) {
         )
     }
 
+    if (pairBackup) BackupPairDialog(backup, onDismiss = { pairBackup = false }) { d -> pairBackup = false; toRestore = d }
+
     if (confirmLogout) {
         ActionsDialog(
             "¿Cerrar sesión?",
@@ -392,4 +502,49 @@ fun parseXtreamLink(url: String): Account? {
     } catch (e: Exception) {
         null
     }
+}
+
+
+/** Página en la red de casa para bajar la copia al PC o subir una de Glass o de Visor. */
+@Composable
+private fun BackupPairDialog(backup: com.glass.tv.data.Backup, onDismiss: () -> Unit, onReceived: (com.glass.tv.data.BackupData) -> Unit) {
+    val p = LocalPalette.current
+    var locked by remember { mutableStateOf(false) }
+    val server = remember {
+        com.glass.tv.addons.PairServer(
+            emptyList(),
+            onSubmit = { what, value ->
+                if (what != com.glass.tv.addons.PairServer.RESTORE) throw IllegalArgumentException("No se pudo leer.")
+                val d = backup.parse(value) ?: throw IllegalArgumentException("Ese archivo no es una copia de Glass ni de Visor.")
+                onReceived(d)
+                "Copia recibida. Confirma en la tele para restaurarla."
+            },
+            backup = { backup.exportText() },
+            intro = "Copia de seguridad de Glass: favoritos, progreso, recientes, ajustes y grabaciones programadas.",
+            backupIntro = "Descarga la copia para guardarla en el PC o el móvil. También puedes restaurar aquí una copia de Visor (visor-backup.json).",
+            backupFileName = "glass-copia",
+        )
+    }
+    val address = remember { server.start() }
+    androidx.compose.runtime.DisposableEffect(server) {
+        server.onLocked = { locked = true }
+        onDispose { server.stop() }
+    }
+    val first = remember { FocusRequester() }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.width(520.dp).glassPanel().padding(horizontal = 24.dp, vertical = 22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            T("Copia desde el móvil o el PC", Type.h2)
+            if (address == null) T("La tele no parece estar conectada a una red local.", Type.body, p.rec, maxLines = 2)
+            else {
+                T("Con el móvil o el PC en la misma red, abre en el navegador:", Type.body, p.muted)
+                LoginBigText(address.removePrefix("http://"))
+                T("y escribe este código:", Type.body, p.muted)
+                LoginBigText(server.code)
+                T("Úsalo solo en la red de tu casa. La página se cierra al salir de aquí.", Type.small, p.muted, maxLines = 2)
+                if (locked) T("Demasiados códigos equivocados: la página se ha cerrado.", Type.small, p.rec)
+            }
+            Row(Modifier.padding(top = 6.dp)) { TvButton("Cerrar", onClick = onDismiss, focusRequester = first) }
+        }
+    }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(50); try { first.requestFocus() } catch (_: Exception) { } }
 }
