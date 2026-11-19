@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -68,6 +69,7 @@ import com.glass.tv.ui.LocalPalette
 import com.glass.tv.ui.Pill
 import com.glass.tv.ui.T
 import com.glass.tv.ui.TvButton
+import com.glass.tv.ui.Symbols
 import com.glass.tv.ui.Type
 import com.glass.tv.ui.GlassTheme
 import com.glass.tv.ui.screens.hm
@@ -374,42 +376,48 @@ private fun PlayerScreen(app: GlassApp, onExit: () -> Unit) {
                         Type.small, p.rec, maxLines = 2,
                     )
                 }
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TvButton(if (playing) "Pausa" else "Reanudar", focusRequester = firstButton, onClick = { engine.togglePause() })
+                // Controles compactos, como en tvOS: iconos en cápsulas de cristal; caben todos en una línea.
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TvButton("", icon = if (playing) Symbols.Pause else Symbols.Play, description = if (playing) "Pausa" else "Reanudar", focusRequester = firstButton, onClick = { engine.togglePause() })
                     if (!isLive) {
-                        TvButton("−10 s", onClick = { engine.seekBy(-10_000) })
-                        TvButton("+30 s", onClick = { engine.seekBy(30_000) })
+                        TvButton("10", icon = Symbols.Rewind, description = "Atrás 10 segundos", onClick = { engine.seekBy(-10_000) })
+                        TvButton("30", icon = Symbols.Forward, description = "Adelante 30 segundos", onClick = { engine.seekBy(30_000) })
                     } else if (engine.timeshift) {
-                        TvButton("−10 s", onClick = { engine.seekBy(-10_000) })
+                        TvButton("10", icon = Symbols.Rewind, description = "Atrás 10 segundos", onClick = { engine.seekBy(-10_000) })
                         if (liveDelay >= 2_000) {
-                            TvButton("+10 s", onClick = { engine.seekBy(10_000) })
-                            TvButton("● Directo", dot = p.rec, onClick = { engine.goLive() })
+                            TvButton("10", icon = Symbols.Forward, description = "Adelante 10 segundos", onClick = { engine.seekBy(10_000) })
+                            TvButton("Directo", dot = p.rec, onClick = { engine.goLive() })
                         }
                     }
-                    TvButton("Audio y subtítulos", onClick = { panel = !panel; tracksVersion++ })
+                    Spacer(Modifier.weight(1f))
+                    TvButton("", icon = Symbols.Subtitles, description = "Audio y subtítulos", onClick = { panel = !panel; tracksVersion++ })
                     // Ajustar → Rellenar → Zoom; se recuerda para la próxima vez
-                    TvButton("Imagen: ${app.settings.aspect.label}", onClick = {
+                    TvButton(app.settings.aspect.label, icon = Symbols.Aspect, description = "Imagen", onClick = {
                         val next = app.settings.aspect.next()
                         app.settings.updateAspect(next)
                         engine.setAspect(next)
                     })
                     if (isLive) {
-                        if (rec == null) TvButton("Grabar", dot = p.rec, onClick = { startManualRecording(app, item.id, item.title, epgNow) })
-                        else TvButton("Detener grabación", dot = p.rec, onClick = { app.recordings.cancel(rec.id) })
+                        if (rec == null) TvButton("", icon = Symbols.Record, description = "Grabar", onClick = { startManualRecording(app, item.id, item.title, epgNow) })
+                        else TvButton("", icon = Symbols.Stop, description = "Detener grabación", onClick = { app.recordings.cancel(rec.id) })
                     }
                     val favType = when (item.kind) { "live" -> "live"; "vod" -> "vod"; else -> null }
                     if (favType != null) {
                         val fav = app.favorites.contains(favType, item.id)
-                        TvButton(if (fav) "★" else "☆", selected = fav, onClick = {
+                        TvButton("", icon = if (fav) Symbols.Star else Symbols.StarOutline, description = if (fav) "Quitar de favoritos" else "Añadir a favoritos", selected = fav, onClick = {
                             app.favorites.toggle(FavItem(type = favType, id = item.id, name = item.title, icon = item.icon, ext = item.ext, epgId = item.epgId, num = item.subtitle.toIntOrNull() ?: 0))
                         })
                     }
-                    if (isLive) TvButton("Ver en ventana", onClick = {
+                    if (isLive) TvButton("", icon = Symbols.Window, description = "Ver en ventana", onClick = {
                         // El canal sigue en una ventana pequeña mientras navegas por la app
                         MiniPlayer.start(app, item, engineType)
                         onExit()
                     })
-                    TvButton("Usar ${if (engineType == Engine.EXO) "VLC" else "ExoPlayer"}", onClick = {
+                    TvButton(if (engineType == Engine.EXO) "VLC" else "Exo", icon = Symbols.Swap, description = "Cambiar de reproductor", onClick = {
                         saveProgress()
                         engineType = if (engineType == Engine.EXO) Engine.VLC else Engine.EXO
                     })

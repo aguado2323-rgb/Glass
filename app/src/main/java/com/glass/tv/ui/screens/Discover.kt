@@ -357,7 +357,7 @@ private fun ResumeRow(app: GlassApp, nav: Nav, resume: List<Resume>, start: Int,
     val first = start.coerceIn(0, (resume.size - 1).coerceAtLeast(0))
     val state = rememberLazyListState(initialFirstVisibleItemIndex = first)
     LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp)) {
-        itemsIndexed(resume, key = { _, r -> r.meta.key }) { i, r ->
+        itemsIndexed(resume.distinctBy { it.meta.key }, key = { _, r -> r.meta.key }) { i, r ->
             val k = "disc:cw:${r.meta.key}"
             var menu by remember { mutableStateOf(false) }
             val back = rememberReturnFocus(nav, k)
@@ -396,7 +396,7 @@ private fun MetaRow(
     val first = start.coerceIn(0, (list.size - 1).coerceAtLeast(0))
     val state = rememberLazyListState(initialFirstVisibleItemIndex = first)
     LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp)) {
-        itemsIndexed(list, key = { _, m -> m.key }) { i, m ->
+        itemsIndexed(list.distinctBy { it.key }, key = { _, m -> m.key }) { i, m ->
             val k = "$prefix:${m.key}"
             val back = rememberReturnFocus(nav, k)
             Poster(
@@ -421,7 +421,7 @@ fun MetaGrid(app: GlassApp, nav: Nav, list: List<MetaPreview>, prefix: String, m
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = padding,
     ) {
-        items(list, key = { it.key }) { m ->
+        items(list.distinctBy { it.key }, key = { it.key }) { m ->
             val k = "$prefix:${m.key}"
             Poster(
                 modifier = Modifier.fillMaxWidth(),

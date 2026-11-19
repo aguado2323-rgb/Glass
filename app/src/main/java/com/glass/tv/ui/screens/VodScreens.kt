@@ -121,7 +121,7 @@ fun MovieGrid(app: GlassApp, nav: Nav, list: List<VodStream>) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = GRID_PADDING,
     ) {
-        items(list, key = { it.id }) { v ->
+        items(list.distinctBy { it.id }, key = { it.id }) { v ->
             val key = "vod:${v.id}"
             Poster(
                 modifier = Modifier.fillMaxWidth(),
@@ -190,7 +190,7 @@ fun SeriesGrid(app: GlassApp, nav: Nav, list: List<SeriesItem>) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = GRID_PADDING,
     ) {
-        items(list, key = { it.id }) { s ->
+        items(list.distinctBy { it.id }, key = { it.id }) { s ->
             val key = "series:${s.id}"
             Poster(
                 modifier = Modifier.fillMaxWidth(),

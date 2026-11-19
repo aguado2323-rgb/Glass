@@ -82,7 +82,7 @@ private fun CatalogShelves(app: GlassApp, nav: Nav, type: String) {
     val vod = type == "vod"
     val cats = load(app.repo.version) { if (vod) app.repo.vodCategories() else app.repo.seriesCategories() }
     LoadView(cats) { list ->
-        val folders = arrangedFolders(app, type, list).filterNot { app.folders.isBlocked(type, it.id) }
+        val folders = arrangedFolders(app, type, list).filterNot { app.folders.isBlocked(type, it.id) }.distinctBy { it.id }
         val favCount = app.favorites.of(type).size
         LazyColumn(contentPadding = PaddingValues(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item(key = "new") { Shelf(app, nav, type, "Novedades", NEW_FOLDER) }
@@ -106,7 +106,8 @@ private fun Shelf(app: GlassApp, nav: Nav, type: String, title: String, id: Stri
             else -> app.repo.series(id).take(30)
         }
     }
-    val list = items.orNull()
+    // Algunos proveedores repiten el mismo título en una carpeta: una clave repetida en la fila cierra la app
+    val list = items.orNull()?.distinctBy { if (it is VodStream) "v" + it.id else "s" + (it as SeriesItem).id }
     if (list != null && list.isEmpty()) return
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
