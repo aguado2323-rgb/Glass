@@ -348,6 +348,7 @@ private fun TabsScaffold(app: GlassApp, nav: Nav) {
 
 /** Panel de cristal del menú lateral, con las secciones en el orden de siempre y Ajustes abajo. */
 @Composable
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun SideMenu(nav: Nav, now: String, activeItem: FocusRequester, onFocusTab: (Tab) -> Unit, onPick: (Tab) -> Unit, onClose: () -> Unit) {
     val p = LocalPalette.current
     Column(
