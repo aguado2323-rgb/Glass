@@ -120,7 +120,8 @@ class Backup(private val app: GlassApp) {
     }
 
     private fun readAny(): String? {
-        if (appFile.exists()) return appFile.readText()
+        // Una copia real ocupa unos pocos KB: un archivo enorme no se carga entero en memoria
+        if (appFile.exists()) return appFile.takeIf { it.length() <= MAX_BYTES }?.readText()
         // Copia en Descargas (la que hizo esta app, o una dejada ahí en sistemas antiguos)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -130,13 +131,16 @@ class Backup(private val app: GlassApp) {
                 )?.use { c ->
                     if (c.moveToFirst()) {
                         val uri = android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0))
-                        return app.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                        return app.contentResolver.openInputStream(uri)?.use { input ->
+                            val bytes = input.readNBytesCompat(MAX_BYTES + 1)
+                            if (bytes.size > MAX_BYTES) null else bytes.toString(Charsets.UTF_8)
+                        }
                     }
                 }
             } else {
                 @Suppress("DEPRECATION")
                 val f = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), FILE_NAME)
-                if (f.exists()) return f.readText()
+                if (f.exists() && f.length() <= MAX_BYTES) return f.readText()
             }
         } catch (_: Exception) { }
         return null
@@ -169,6 +173,8 @@ class Backup(private val app: GlassApp) {
             withContext(Dispatchers.IO) {
                 val ed = app.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().clear()
                 data.settings.forEach { (k, v) ->
+                    // Solo ajustes conocidos y con su tipo: el resto se ignora
+                    if (v.length < 2 || v[1] != ':' || Settings.expectedType(k) != v[0]) return@forEach
                     val value = v.substring(2)
                     when (v.take(2)) {
                         "s:" -> ed.putString(k, value)
@@ -180,11 +186,17 @@ class Backup(private val app: GlassApp) {
                 }
                 ed.commit()
             }
-            app.favorites.replaceAll(data.favorites)
-            app.progress.replaceAll(data.progress)
-            data.recents.asReversed().forEach { app.recents.add(it) }
+            app.favorites.replaceAll(data.favorites.distinctBy { it.key }.take(MAX_ITEMS))
+            app.progress.replaceAll(data.progress.filter { it.item.kind != "file" })
+            data.recents.take(15).asReversed().forEach { app.recents.add(it) }
             val now = System.currentTimeMillis()
-            data.recordings.filter { it.end > now && app.recordings.get(it.id) == null }.forEach { app.recordings.schedule(it) }
+            // De la copia solo se toma qué grabar y cuándo. La ruta del archivo, el estado y el tamaño se
+            // descartan: una copia manipulada podría apuntar a un archivo de la app y borrarlo al quitarla de la lista.
+            data.recordings
+                .filter { it.end > now && it.end > it.start && it.end - it.start <= MAX_REC_MS && app.recordings.get(it.id) == null }
+                .take(MAX_ITEMS)
+                .map { it.copy(status = Recording.STATUS_SCHEDULED, file = "", bytes = 0, error = "", storage = -1) }
+                .forEach { app.recordings.schedule(it) }
             BackupResult(true, "Copia restaurada. Glass se reinicia para aplicar los ajustes.")
         } catch (e: Exception) {
             BackupResult(false, "No se pudo restaurar: ${e.message}")
@@ -192,6 +204,8 @@ class Backup(private val app: GlassApp) {
     }
 
     fun restartApp() {
+        // Lo restaurado se escribe en segundo plano: se espera a que esté en disco antes de cerrar
+        FileStore.flush()
         val i = app.packageManager.getLaunchIntentForPackage(app.packageName) ?: return
         app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         Runtime.getRuntime().exit(0)
@@ -202,6 +216,21 @@ class Backup(private val app: GlassApp) {
         /** Nombre de la copia que hace Visor: el formato es el mismo. */
         const val VISOR_FILE_NAME = "visor-backup.json"
         private const val MAX_IMPORT_BYTES = 4L * 1024 * 1024
+        private const val MAX_ITEMS = 2000
+        private const val MAX_BYTES = 8 * 1024 * 1024
+        private const val MAX_REC_MS = 24 * 60 * 60_000L
         fun dateOf(ms: Long): String = SimpleDateFormat("d MMM yyyy, HH:mm", Locale("es")).format(Date(ms))
     }
+}
+
+/** Lee como mucho [limit] bytes (InputStream.readNBytes solo existe desde Android 13). */
+private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    val buf = ByteArray(64 * 1024)
+    while (out.size() < limit) {
+        val n = read(buf, 0, minOf(buf.size, limit - out.size()))
+        if (n < 0) break
+        out.write(buf, 0, n)
+    }
+    return out.toByteArray()
 }

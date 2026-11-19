@@ -155,3 +155,4 @@ fun parseAddonAddress(input: String): AddonAddress? {
     if (host.isBlank() || '.' !in host && !host.startsWith("localhost")) return null
     return AddonAddress(path, query)
 }
+

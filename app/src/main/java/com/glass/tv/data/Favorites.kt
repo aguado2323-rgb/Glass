@@ -30,7 +30,7 @@ class Favorites(context: Context) {
 
     init {
         try {
-            if (file.exists()) items.addAll(json.decodeFromString<List<FavItem>>(file.readText()))
+            FileStore.read(file)?.let { items.addAll(json.decodeFromString<List<FavItem>>(it)) }
         } catch (_: Exception) { }
     }
 
@@ -52,7 +52,7 @@ class Favorites(context: Context) {
     }
 
     private fun save() {
-        try { file.writeText(json.encodeToString(items.toList())) } catch (_: Exception) { }
+        FileStore.writeAsync(file, json.encodeToString(items.toList()))
     }
 }
 
@@ -74,7 +74,7 @@ class Progress(context: Context) {
 
     init {
         try {
-            if (file.exists()) entries.addAll(json.decodeFromString<List<ProgressEntry>>(file.readText()))
+            FileStore.read(file)?.let { entries.addAll(json.decodeFromString<List<ProgressEntry>>(it)) }
         } catch (_: Exception) { }
     }
 
@@ -88,13 +88,11 @@ class Progress(context: Context) {
         save()
     }
 
-    private fun save() {
-        try { file.writeText(json.encodeToString(entries.toList())) } catch (_: Exception) { }
-    }
+    private fun save() = FileStore.writeAsync(file, json.encodeToString(entries.toList()))
 
     fun replaceAll(list: List<ProgressEntry>) {
-        entries.clear(); entries.addAll(list)
-        try { file.writeText(json.encodeToString(entries.toList())) } catch (_: Exception) { }
+        entries.clear(); entries.addAll(list.take(MAX))
+        save()
     }
 
     fun update(item: PlayItem, pos: Long, dur: Long) {
@@ -109,9 +107,11 @@ class Progress(context: Context) {
             entries.removeAll { it.done && it.item.seriesKey == series }
             entries.add(0, ProgressEntry(item, dur, dur, System.currentTimeMillis(), done = true))
         }
-        while (entries.size > 60) entries.removeAt(entries.lastIndex)
+        while (entries.size > MAX) entries.removeAt(entries.lastIndex)
         save()
     }
+
+    private companion object { const val MAX = 60 }
 }
 
 
@@ -123,7 +123,7 @@ class RecentChannels(context: Context) {
 
     init {
         try {
-            if (file.exists()) items.addAll(json.decodeFromString<List<PlayItem>>(file.readText()))
+            FileStore.read(file)?.let { items.addAll(json.decodeFromString<List<PlayItem>>(it)) }
         } catch (_: Exception) { }
     }
 
@@ -132,6 +132,6 @@ class RecentChannels(context: Context) {
         items.removeAll { it.id == item.id }
         items.add(0, item)
         while (items.size > 15) items.removeAt(items.lastIndex)
-        try { file.writeText(json.encodeToString(items.toList())) } catch (_: Exception) { }
+        FileStore.writeAsync(file, json.encodeToString(items.toList()))
     }
 }

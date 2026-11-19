@@ -253,7 +253,7 @@ class Discover(context: Context, http: OkHttpClient, private val vault: SecureSt
         picks.remove(item.key); picks[item.key] = p
         if (item.parent.isNotBlank() && item.parent != item.ref) { picks.remove(item.parent); picks[item.parent] = p }
         while (picks.size > MAX_PICKS) picks.remove(picks.keys.first())
-        try { picksFile.writeText(json.encodeToString(picks.toMap())) } catch (e: Exception) { }
+        com.glass.tv.data.FileStore.writeAsync(picksFile, json.encodeToString(picks.toMap()))
     }
 
     /** Enlace reproducible de una fuente: el suyo, o el que dé la primera cuenta debrid que la tenga en caché. */

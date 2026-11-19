@@ -14,6 +14,9 @@ import com.glass.tv.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -58,7 +61,10 @@ class Updater(private val ctx: Context, private val http: OkHttpClient) {
                 val tag = o.s("tag_name").removePrefix("v").removePrefix("V").replace('_', '.')
                 val asset = o["assets"].asArr().mapNotNull { it.asObj() }.firstOrNull { it.s("name").endsWith(".apk") }
                     ?: return@withContext null
-                val rel = Release(tag, o.s("body"), asset.s("browser_download_url"), asset.l("size"))
+                val url = asset.s("browser_download_url")
+                // Solo se descarga de GitHub y por HTTPS
+                if (!trustedUrl(url)) return@withContext null
+                val rel = Release(tag, o.s("body"), url, asset.l("size"))
                 if (isNewer(tag, current)) {
                     withContext(Dispatchers.Main) {
                         available = rel
@@ -92,24 +98,34 @@ class Updater(private val ctx: Context, private val http: OkHttpClient) {
                 val out = File(dir, "glass-${rel.version}.apk")
                 http.newCall(Request.Builder().url(rel.apkUrl).build()).execute().use { r ->
                     if (!r.isSuccessful) throw IOException("Descarga fallida (${r.code})")
+                    // Tras las redirecciones también tiene que seguir siendo GitHub por HTTPS
+                    if (!trustedUrl(r.request.url.toString())) throw IOException("origen no fiable")
                     val body = r.body ?: throw IOException("Respuesta vacía")
                     val total = body.contentLength().takeIf { it > 0 } ?: rel.sizeBytes
                     body.byteStream().use { input ->
                         out.outputStream().use { output ->
                             val buf = ByteArray(64 * 1024)
                             var done = 0L
+                            var lastPct = -1
                             while (true) {
                                 val n = input.read(buf)
                                 if (n < 0) break
                                 output.write(buf, 0, n)
                                 done += n
-                                if (total > 0) withContext(Dispatchers.Main) { progress = done.toFloat() / total }
+                                if (done > MAX_APK) throw IOException("el archivo es demasiado grande")
+                                // Se avisa a la interfaz como mucho cada 1 %: antes era una vuelta al hilo principal por cada 64 KB
+                                if (total > 0) {
+                                    val pct = (done * 100 / total).toInt()
+                                    if (pct != lastPct) { lastPct = pct; withContext(Dispatchers.Main) { progress = done.toFloat() / total } }
+                                }
                             }
                         }
                     }
                 }
+                verifyApk(out)
                 out
             } catch (e: Exception) {
+                (File(ctx.cacheDir, "updates")).listFiles()?.forEach { it.delete() }
                 withContext(Dispatchers.Main) { error = "No se pudo descargar: ${e.message}" }
                 null
             }
@@ -128,6 +144,32 @@ class Updater(private val ctx: Context, private val http: OkHttpClient) {
         }
     }
 
+    /**
+     * Antes de abrir el instalador se comprueba que el APK es de esta app y está firmado con la misma clave.
+     * Android ya lo rechazaría al instalar encima, pero así nunca se ofrece instalar otra app distinta
+     * aunque alguien publicara un APK ajeno en las releases.
+     */
+    private fun verifyApk(f: File) {
+        val pm = ctx.packageManager
+        val apk = signersOf { flags -> pm.getPackageArchiveInfo(f.path, flags) }
+        if (apk.first == null) throw IOException("el archivo no es un APK válido")
+        if (apk.first != ctx.packageName) throw IOException("el APK no es de Glass")
+        val mine = signersOf { flags -> pm.getPackageInfo(ctx.packageName, flags) }
+        if (apk.second.isEmpty() || apk.second != mine.second) throw IOException("el APK no está firmado con la clave de Glass")
+    }
+
+    /** Paquete y certificados de firma (los del contenido del APK). Si la API nueva no los da, se usa la antigua. */
+    @Suppress("DEPRECATION")
+    private fun signersOf(info: (Int) -> PackageInfo?): Pair<String?, Set<String>> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val pi = info(PackageManager.GET_SIGNING_CERTIFICATES)
+            val set = pi?.signingInfo?.apkContentsSigners.orEmpty().map { it.toCharsString() }.toSet()
+            if (pi != null && set.isNotEmpty()) return pi.packageName to set
+        }
+        val pi = info(PackageManager.GET_SIGNATURES) ?: return null to emptySet()
+        return pi.packageName to pi.signatures.orEmpty().map { it.toCharsString() }.toSet()
+    }
+
     fun dismiss(rel: Release) {
         skipped = rel.version
         prompt = false
@@ -136,6 +178,13 @@ class Updater(private val ctx: Context, private val http: OkHttpClient) {
 
     companion object {
         const val REPO = "aguado2323-rgb/glass"
+        private const val MAX_APK = 300L * 1024 * 1024
+        private val TRUSTED_HOSTS = setOf("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
+
+        private fun trustedUrl(u: String): Boolean {
+            val url = u.toHttpUrlOrNull() ?: return false
+            return url.isHttps && (url.host in TRUSTED_HOSTS || url.host.endsWith(".githubusercontent.com"))
+        }
 
         /** Compara versiones "0.10.2" > "0.9.7" número a número. */
         fun isNewer(candidate: String, current: String): Boolean {

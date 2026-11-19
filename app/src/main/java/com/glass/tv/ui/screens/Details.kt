@@ -160,7 +160,13 @@ internal fun fmtDuration(s: String): String {
 
 /** Abre el tráiler de YouTube si hay una app que lo pueda abrir. */
 internal fun openTrailer(ctx: Context, code: String): Boolean {
-    val url = if (code.startsWith("http")) code else "https://www.youtube.com/watch?v=$code"
+    // El código viene del proveedor o de un addon: solo se abren enlaces web, nunca otros esquemas (intent:, file:…)
+    val c = code.trim()
+    val url = when {
+        c.startsWith("https://", true) || c.startsWith("http://", true) -> c
+        c.matches(Regex("[A-Za-z0-9_-]{6,20}")) -> "https://www.youtube.com/watch?v=$c"
+        else -> return false
+    }
     return try {
         ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         true

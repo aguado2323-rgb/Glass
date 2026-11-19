@@ -52,14 +52,12 @@ class RecordingStore(private val ctx: Context) {
 
     init {
         try {
-            if (file.exists()) items.addAll(json.decodeFromString<List<Recording>>(file.readText()))
+            com.glass.tv.data.FileStore.read(file)?.let { items.addAll(json.decodeFromString<List<Recording>>(it)) }
         } catch (_: Exception) { }
     }
 
     @Synchronized
-    private fun save() {
-        try { file.writeText(json.encodeToString(items.toList())) } catch (_: Exception) { }
-    }
+    private fun save() = com.glass.tv.data.FileStore.writeAsync(file, json.encodeToString(items.toList()))
 
     fun get(id: String) = items.firstOrNull { it.id == id }
 

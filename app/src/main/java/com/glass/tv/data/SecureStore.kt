@@ -33,10 +33,24 @@ class SecureStore(context: Context) {
     private val prefs = context.getSharedPreferences("vault", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
 
-    private fun key(): SecretKey {
+    // La clave del Keystore se busca una vez: abrir el Keystore en cada lectura es lento (va por IPC)
+    @Volatile private var cachedKey: SecretKey? = null
+
+    @Synchronized
+    private fun key(): SecretKey = cachedKey ?: loadKey().also { cachedKey = it }
+
+    init {
+        // Si hay datos guardados, se comprueba ya que su clave sigue existiendo (ver loadKey)
+        if (prefs.all.isNotEmpty()) try { key() } catch (_: Exception) { }
+    }
+
+    private fun loadKey(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry
         if (existing != null) return existing.secretKey
+        // Sin clave pero con datos guardados: el Keystore la perdió y lo cifrado ya no se puede leer.
+        // Se borra para empezar limpio (volver a iniciar sesión) en vez de quedar bloqueado por un PIN ilegible.
+        if (prefs.all.isNotEmpty()) prefs.edit().clear().commit()
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         gen.init(
             KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
@@ -82,7 +96,12 @@ class SecureStore(context: Context) {
     fun saveSecret(name: String, value: String?) = put("x_$name", value)
     fun loadSecret(name: String): String? = get("x_$name")
 
-    fun hasPin(): Boolean = get(K_PIN) != null
+    /**
+     * Hay PIN guardado, aunque no se pueda descifrar. Antes, si el Keystore perdía la clave (actualización del
+     * sistema, restauración…), hasPin() decía que no había PIN y checkPin() aceptaba cualquiera: el bloqueo
+     * de carpetas y de Ajustes quedaba abierto sin avisar.
+     */
+    fun hasPin(): Boolean = prefs.contains(K_PIN)
 
     fun setPin(pin: String?) {
         if (pin == null) { put(K_PIN, null); return }
@@ -91,9 +110,18 @@ class SecureStore(context: Context) {
     }
 
     fun checkPin(pin: String): Boolean {
-        val stored = get(K_PIN) ?: return true
-        val (saltB, h) = stored.split(":", limit = 2)
-        return hash(Base64.decode(saltB, Base64.NO_WRAP), pin) == h
+        if (!prefs.contains(K_PIN)) return true
+        // PIN guardado pero ilegible (dato dañado o manipulado): se niega en vez de dejar pasar a cualquiera.
+        val stored = get(K_PIN) ?: return false
+        val parts = stored.split(":", limit = 2)
+        if (parts.size != 2) return false
+        return try {
+            val expected = Base64.decode(parts[1], Base64.NO_WRAP)
+            val actual = Base64.decode(hash(Base64.decode(parts[0], Base64.NO_WRAP), pin), Base64.NO_WRAP)
+            MessageDigest.isEqual(expected, actual)
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun hash(salt: ByteArray, pin: String): String {
