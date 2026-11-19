@@ -211,7 +211,7 @@ fun DiscoverScreen(app: GlassApp, nav: Nav) = CompositionLocalProvider(LocalPale
 
     Box(Modifier.fillMaxSize()) {
         DiscoverBackdrop(if (searching) null else focused)
-        Column(Modifier.fillMaxSize().padding(top = 60.dp)) {
+        Column(Modifier.fillMaxSize().padding(top = 28.dp)) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 48.dp),
                 verticalAlignment = Alignment.CenterVertically,
