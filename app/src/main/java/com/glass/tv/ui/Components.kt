@@ -140,7 +140,7 @@ fun TvButton(
                         else -> Modifier.glass(shape)
                     }
                 )
-                .padding(horizontal = if (text.isEmpty() && icon != null) 10.dp else 20.dp, vertical = 10.dp),
+                .padding(horizontal = if (text.isEmpty() && icon != null) 10.dp else if (icon != null) 14.dp else 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -300,16 +300,10 @@ fun Modifier.glassPanel(shape: Shape = RoundedCornerShape(28.dp)): Modifier = co
     this.shadow(30.dp, shape, ambientColor = Color.Black, spotColor = Color.Black).glass(shape, p.glassThick)
 }
 
-/** Fondo ambiental: un degradado profundo y suave que da color al cristal de encima. */
+/** Fondo de la app: negro (u oscuro del tema) liso. El degradado azulado de antes chocaba con las vistas de fondo negro. */
 @Composable
 fun AmbientBackground(modifier: Modifier = Modifier) {
-    val p = LocalPalette.current
-    Box(
-        modifier
-            .background(p.bg)
-            .background(Brush.radialGradient(listOf(p.ambientA, Color.Transparent), center = androidx.compose.ui.geometry.Offset(0f, 0f), radius = 1600f))
-            .background(Brush.radialGradient(listOf(p.ambientB, Color.Transparent), center = androidx.compose.ui.geometry.Offset(2200f, 1300f), radius = 1500f))
-    )
+    Box(modifier.background(LocalPalette.current.bg))
 }
 
 @Composable

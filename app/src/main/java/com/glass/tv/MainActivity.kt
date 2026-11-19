@@ -58,6 +58,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import com.glass.tv.player.MiniPlayer
 import com.glass.tv.player.MiniPlayerWindow
@@ -249,6 +250,7 @@ private fun TabsScaffold(app: GlassApp, nav: Nav) {
     val p = LocalPalette.current
     // Menú lateral de tvOS 18: oculto mientras ves contenido; se abre con ← desde el borde izquierdo o con Atrás.
     var menuOpen by remember { mutableStateOf(false) }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val activeItem = remember { FocusRequester() }
     val content = remember { FocusRequester() }
     val now by produceState(initialValue = clock()) {
@@ -298,6 +300,13 @@ private fun TabsScaffold(app: GlassApp, nav: Nav) {
             Modifier
                 .fillMaxSize()
                 .offset(x = shift)
+                // ← abre el menú solo cuando no hay nada más a la izquierda dentro del contenido. Antes había un borde
+                // enfocable de toda la altura, y ↓ al final de una lista podía saltar a él y abrir el menú.
+                .onKeyEvent { e ->
+                    if (menuOpen || e.key != Key.DirectionLeft) return@onKeyEvent false
+                    if (e.type == KeyEventType.KeyDown && !focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Left)) menuOpen = true
+                    true
+                }
                 .focusRequester(content)
                 .focusRestorer()
                 .focusGroup()
@@ -312,13 +321,6 @@ private fun TabsScaffold(app: GlassApp, nav: Nav) {
             if (dim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
         }
 
-        // Borde izquierdo invisible (fuera del contenido, para que al volver no se restaure aquí el foco):
-        // al pulsar ← en lo primero de una fila, el foco llega aquí y abre el menú
-        if (!menuOpen) Box(
-            Modifier.align(Alignment.CenterStart).width(2.dp).fillMaxHeight()
-                .onFocusChanged { if (it.isFocused) menuOpen = true }
-                .focusable()
-        )
 
         // Ventana de un canal: controles arriba a la derecha
         MiniPlayer.item?.let { m ->
