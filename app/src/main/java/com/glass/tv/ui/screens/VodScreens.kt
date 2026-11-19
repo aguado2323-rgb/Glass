@@ -68,7 +68,10 @@ internal fun rating(r: String): String? = r.toDoubleOrNull()?.takeIf { it > 0 }?
 // ---------------- Películas ----------------
 
 @Composable
-fun MoviesScreen(app: GlassApp, nav: Nav) {
+fun MoviesScreen(app: GlassApp, nav: Nav) = CatalogSwitch(app, nav, "vod") { MovieFolders(app, nav) }
+
+@Composable
+private fun MovieFolders(app: GlassApp, nav: Nav) {
     val cats = load(app.repo.version) { app.repo.vodCategories() }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val entry = remember { FolderEntry() }
@@ -140,7 +143,10 @@ fun MovieGrid(app: GlassApp, nav: Nav, list: List<VodStream>) {
 // ---------------- Series ----------------
 
 @Composable
-fun SeriesScreen(app: GlassApp, nav: Nav) {
+fun SeriesScreen(app: GlassApp, nav: Nav) = CatalogSwitch(app, nav, "series") { SeriesFolders(app, nav) }
+
+@Composable
+private fun SeriesFolders(app: GlassApp, nav: Nav) {
     val cats = load(app.repo.version) { app.repo.seriesCategories() }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val entry = remember { FolderEntry() }
