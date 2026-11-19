@@ -102,6 +102,27 @@ class Settings(context: Context) {
         p.edit().putInt("mBefore", marginBefore).putInt("mAfter", marginAfter).apply()
     }
     fun updatePinOnStart(v: Boolean) { pinOnStart = v; p.edit().putBoolean("pinStart", v).apply() }
+
+    companion object {
+        private val INT_KEYS = setOf("storage", "mBefore", "mAfter")
+        private val BOOL_KEYS = setOf("pinStart", "dSpanish", "dHideCam", "dAuto")
+        private val STRING_KEYS = setOf(
+            "theme", "engine", "vodEngine", "aspect", "liveFormat", "art", "audio", "subs", "refresh",
+            "dMaxQuality", "dMaxSize", "vodSort", "seriesSort",
+        )
+
+        /**
+         * Tipo que debe tener cada ajuste al restaurar una copia ('i', 'b' o 's'), o null si la clave no es
+         * de la app. Un ajuste con el tipo cambiado (copia editada o dañada) haría que la app se cerrara
+         * al arrancar, una y otra vez, hasta borrar sus datos.
+         */
+        fun expectedType(key: String): Char? = when {
+            key in INT_KEYS -> 'i'
+            key in BOOL_KEYS -> 'b'
+            key in STRING_KEYS || key.startsWith("fold_") -> 's'
+            else -> null
+        }
+    }
 }
 
 /** Devuelve el siguiente valor de un enum, en bucle. Útil para ajustes que se cambian con OK. */

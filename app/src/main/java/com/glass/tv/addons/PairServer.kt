@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.Inet4Address
+import java.net.InetAddress
+import java.security.MessageDigest
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
@@ -39,7 +41,8 @@ class PairServer(
     /** Dirección que hay que abrir en el móvil, o null si la tele no está en una red local. */
     fun start(): String? {
         val ip = localIp() ?: return null
-        val s = try { bind(PORT) } catch (e: Exception) { try { bind(0) } catch (e2: Exception) { return null } }
+        // Solo en la dirección de la red de casa: no en IPv6 pública, VPN ni otras interfaces
+        val s = try { bind(ip, PORT) } catch (e: Exception) { try { bind(ip, 0) } catch (e2: Exception) { return null } }
         socket = s
         thread(name = "glass-pair", isDaemon = true) {
             while (!s.isClosed) {
@@ -47,18 +50,23 @@ class PairServer(
                 try { c.use { serve(it) } } catch (e: Exception) { }
             }
         }
-        return "http://$ip" + if (s.localPort == 80) "" else ":${s.localPort}"
+        return "http://${ip.hostAddress}" + if (s.localPort == 80) "" else ":${s.localPort}"
     }
 
     fun stop() { try { socket?.close() } catch (e: Exception) { } ; socket = null }
 
-    private fun bind(port: Int) = ServerSocket().apply { reuseAddress = true; bind(InetSocketAddress(port), 4) }
+    private fun bind(ip: InetAddress, port: Int) = ServerSocket().apply { reuseAddress = true; bind(InetSocketAddress(ip, port), 4) }
+
+    /** Compara el código sin que el tiempo de respuesta delate cuántas cifras coinciden. */
+    private fun codeOk(given: String?): Boolean =
+        given != null && MessageDigest.isEqual(given.trim().toByteArray(), code.toByteArray())
 
     private fun serve(c: Socket) {
         c.soTimeout = 8000
         val from = c.inetAddress
         if (!(from.isSiteLocalAddress || from.isLoopbackAddress || from.isLinkLocalAddress)) return
-        val input = c.getInputStream()
+        // Con búfer: las cabeceras se leen byte a byte y sin él cada byte es una llamada al sistema
+        val input = c.getInputStream().buffered(8192)
         val head = readHead(input) ?: return
         val lines = head.split("\r\n")
         val parts = lines.first().split(" ")
@@ -69,14 +77,15 @@ class PairServer(
 
         if (method == "GET" && path == BACKUP_PATH && backup != null) {
             val q = parts[1].substringAfter('?', "")
-            val ok = parseForm(q)["code"]?.trim() == code
+            val ok = codeOk(parseForm(q)["code"])
             if (ok) {
                 val bytes = runBlocking { withContext(Dispatchers.Main) { backup.invoke() } }.toByteArray(Charsets.UTF_8)
                 val name = "glass-descubrir-" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()) + ".json"
                 val out = c.getOutputStream()
                 out.write(
                     ("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${bytes.size}\r\n" +
-                        "Content-Disposition: attachment; filename=\"$name\"\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray()
+                        "Content-Disposition: attachment; filename=\"$name\"\r\nCache-Control: no-store\r\n" +
+                        "X-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n").toByteArray()
                 )
                 out.write(bytes)
                 out.flush()
@@ -105,7 +114,8 @@ class PairServer(
             val bytes = page.toByteArray(Charsets.UTF_8)
             out.write(
                 ("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\n" +
-                    "Cache-Control: no-store\r\nX-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n").toByteArray()
+                    "Cache-Control: no-store\r\nX-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\n" +
+                    "X-Content-Type-Options: nosniff\r\nContent-Security-Policy: $CSP\r\nConnection: close\r\n\r\n").toByteArray()
             )
             out.write(bytes)
         }
@@ -113,7 +123,7 @@ class PairServer(
     }
 
     private fun submit(f: Map<String, String>): String {
-        if (f["code"]?.trim() != code) {
+        if (!codeOk(f["code"])) {
             if (++failures >= MAX_FAILURES) { stop(); onLocked?.invoke(); return form("Demasiados intentos. Vuelve a abrirlo en la tele.", true) }
             return form("El código no coincide con el de la tele.", true)
         }
@@ -182,6 +192,8 @@ $backupHtml
         private const val MAX_BODY = 512 * 1024
         private const val MAX_HEAD = 8192
         private const val MAX_FAILURES = 5
+        // La página no carga nada de fuera y solo envía formularios a la propia tele
+        private const val CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
 
         private fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
@@ -210,12 +222,12 @@ $backupHtml
             } catch (e: Exception) { null }
         }.toMap()
 
-        private fun localIp(): String? = try {
+        private fun localIp(): InetAddress? = try {
             NetworkInterface.getNetworkInterfaces().asSequence()
                 .filter { it.isUp && !it.isLoopback }
                 .flatMap { it.inetAddresses.asSequence() }
                 .filterIsInstance<Inet4Address>()
-                .firstOrNull { it.isSiteLocalAddress }?.hostAddress
+                .firstOrNull { it.isSiteLocalAddress }
         } catch (e: Exception) {
             null
         }
