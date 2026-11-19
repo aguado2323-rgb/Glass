@@ -22,7 +22,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -113,6 +115,9 @@ fun TvButton(
     focusRequester: FocusRequester? = null,
     onFocused: (() -> Unit)? = null,
     trailing: String? = null,
+    /** Símbolo delante del texto (o solo, si el texto va vacío). */
+    icon: ImageVector? = null,
+    description: String? = null,
 ) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(50)
@@ -135,12 +140,13 @@ fun TvButton(
                         else -> Modifier.glass(shape)
                     }
                 )
-                .padding(horizontal = 20.dp, vertical = 10.dp),
+                .padding(horizontal = if (text.isEmpty() && icon != null) 10.dp else 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (dot != null) Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
-            T(text, Type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), fg)
+            if (icon != null) Icon(icon, contentDescription = description ?: text.ifEmpty { null }, tint = fg, modifier = Modifier.size(18.dp))
+            if (text.isNotEmpty() || icon == null) T(text, Type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), fg)
             if (trailing != null) {
                 Spacer(Modifier.weight(1f, fill = false))
                 T(trailing, Type.small, fg.copy(alpha = 0.7f))
@@ -237,7 +243,7 @@ fun Poster(
     val p = LocalPalette.current
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(14.dp)
-    Column(modifier.width(width), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.width(width), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Focusable(
             onClick = onClick, onMenu = onMenu,
             onFocused = onFocused, shape = shape, scaleOnFocus = true, focusRequester = focusRequester,

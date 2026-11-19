@@ -31,6 +31,11 @@ class PairServer(
     private val onSubmit: suspend (what: String, value: String) -> String,
     /** Contenido de la copia de seguridad que se descarga desde el PC (se pide en el hilo principal). */
     private val backup: (() -> String)? = null,
+    /** Textos de la página, para usarla también al configurar la lista o restaurar la copia completa. */
+    private val intro: String = "Pega aquí la dirección del addon o la clave de tu cuenta. Se guarda cifrada en la tele.",
+    private val valueLabel: String = "Dirección o clave",
+    private val backupIntro: String = "Descarga un archivo con tus addons y cuentas debrid para restaurarlos más tarde, en esta tele o en otra.",
+    private val backupFileName: String = "glass-descubrir",
 ) {
     val code: String = "%06d".format(SecureRandom().nextInt(1_000_000))
     private var socket: ServerSocket? = null
@@ -80,7 +85,7 @@ class PairServer(
             val ok = codeOk(parseForm(q)["code"])
             if (ok) {
                 val bytes = runBlocking { withContext(Dispatchers.Main) { backup.invoke() } }.toByteArray(Charsets.UTF_8)
-                val name = "glass-descubrir-" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()) + ".json"
+                val name = "$backupFileName-" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()) + ".json"
                 val out = c.getOutputStream()
                 out.write(
                     ("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${bytes.size}\r\n" +
@@ -143,14 +148,14 @@ class PairServer(
         val opts = options.joinToString("") { (k, label) -> "<option value=\"${esc(k)}\">${esc(label)}</option>" }
         val backupHtml = if (backup == null) "" else """
 <h1 style="margin-top:36px">Copia de seguridad</h1>
-<p>Descarga un archivo con tus addons y cuentas debrid para restaurarlos más tarde, en esta tele o en otra.
+<p>${esc(backupIntro)}
 Guárdalo en un sitio seguro: lleva dentro tus claves.</p>
 <form method="get" action="$BACKUP_PATH" autocomplete="off">
 <label>Código que ves en la tele</label><input name="code" inputmode="numeric" maxlength="6" required>
 <button type="submit">Descargar copia</button>
 </form>
 <form method="post" action="/" autocomplete="off" id="rf">
-<label>Restaurar una copia (sustituye los addons y cuentas actuales)</label>
+<label>Restaurar una copia (sustituye lo que hay ahora en la tele)</label>
 <input type="file" accept=".json,application/json" id="rfile">
 <input type="hidden" name="what" value="$RESTORE">
 <textarea name="value" id="rval" style="display:none"></textarea>
@@ -160,6 +165,12 @@ Guárdalo en un sitio seguro: lleva dentro tus claves.</p>
 <script>
 document.getElementById('rfile').addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){document.getElementById('rval').value=r.result};r.readAsText(f)});
 </script>"""
+        val mainForm = if (options.isEmpty()) "" else """<form method="post" action="/" autocomplete="off">
+<label>Código que ves en la tele</label><input name="code" inputmode="numeric" maxlength="6" required>
+<label>Qué vas a añadir</label><select name="what">$opts</select>
+<label>${esc(valueLabel)}</label><textarea name="value" required autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+<button type="submit">Enviar a la tele</button>
+</form>"""
         val note = if (message == null) "" else "<p class=\"${if (error) "err" else "ok"}\">${esc(message)}</p>"
         return """<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Glass</title>
@@ -171,14 +182,9 @@ input,select,textarea,button{width:100%;box-sizing:border-box;font-size:16px;pad
 textarea{min-height:96px}button{margin-top:20px;background:#f2f2f3;color:#0b0b0d;font-weight:600;border:0}
 .ok{color:#5ad28a}.err{color:#ff7a7f}
 </style></head><body>
-<h1>Glass</h1><p>Pega aquí la dirección del addon o la clave de tu cuenta. Se guarda cifrada en la tele.</p>
+<h1>Glass</h1><p>${esc(intro)}</p>
 $note
-<form method="post" action="/" autocomplete="off">
-<label>Código que ves en la tele</label><input name="code" inputmode="numeric" maxlength="6" required>
-<label>Qué vas a añadir</label><select name="what">$opts</select>
-<label>Dirección o clave</label><textarea name="value" required autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
-<button type="submit">Enviar a la tele</button>
-</form>
+$mainForm
 $backupHtml
 </body></html>"""
     }

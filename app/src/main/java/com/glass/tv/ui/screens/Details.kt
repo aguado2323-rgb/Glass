@@ -1,5 +1,12 @@
 package com.glass.tv.ui.screens
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.graphics.vector.ImageVector
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -72,6 +79,7 @@ import com.glass.tv.data.SeriesItem
 import com.glass.tv.data.VodStream
 import com.glass.tv.play
 import com.glass.tv.ui.Focusable
+import com.glass.tv.ui.GlassSheen
 import com.glass.tv.ui.Img
 import com.glass.tv.ui.LocalPalette
 import com.glass.tv.ui.OledPalette
@@ -203,7 +211,10 @@ internal fun PrimaryAction(text: String, progress: Float?, focusRequester: Focus
             (if (focused) Modifier.background(Color.White) else Modifier.glass(RoundedCornerShape(50))).padding(horizontal = 22.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            T("▶  $text", Type.label.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold), fg)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                androidx.compose.material3.Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = fg, modifier = Modifier.size(20.dp))
+                T(text, Type.label.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold), fg)
+            }
             if (progress != null) {
                 Box(Modifier.width(150.dp).height(3.dp).clip(CircleShape).background(fg.copy(alpha = 0.2f))) {
                     Box(Modifier.fillMaxWidth(progress.coerceIn(0.02f, 1f)).height(3.dp).background(fg))
@@ -215,8 +226,8 @@ internal fun PrimaryAction(text: String, progress: Float?, focusRequester: Focus
 
 /** Acción secundaria: icono redondo con su nombre debajo. */
 @Composable
-internal fun RoundAction(icon: String, label: String, canFocus: Boolean, onClick: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.width(76.dp)) {
+internal fun RoundAction(icon: ImageVector, label: String, canFocus: Boolean, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.widthIn(min = 76.dp)) {
         Focusable(
             onClick = onClick,
             shape = CircleShape,
@@ -226,9 +237,9 @@ internal fun RoundAction(icon: String, label: String, canFocus: Boolean, onClick
             Box(
                 Modifier.size(44.dp).then(if (focused) Modifier.background(Color.White) else Modifier.glass(CircleShape)),
                 contentAlignment = Alignment.Center,
-            ) { T(icon, Type.label.copy(fontSize = 16.sp), if (focused) Color.Black else Color.White) }
+            ) { androidx.compose.material3.Icon(icon, contentDescription = label, tint = if (focused) Color.Black else Color.White, modifier = Modifier.size(22.dp)) }
         }
-        T(label, Type.small.copy(fontSize = 10.sp), Color(0xB3FFFFFF))
+        T(label, Type.small, Color(0xB3FFFFFF))
     }
 }
 
@@ -236,7 +247,7 @@ internal fun RoundAction(icon: String, label: String, canFocus: Boolean, onClick
 @Composable
 internal fun Tag(text: String) {
     Box(Modifier.border(1.dp, Color.White.copy(alpha = 0.45f), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 1.dp)) {
-        T(text, Type.small.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold), Color.White)
+        T(text, Type.small.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold), Color.White)
     }
 }
 
@@ -369,14 +380,14 @@ fun MovieDetail(app: GlassApp, nav: Nav, vod: VodStream) = CompositionLocalProvi
                         playBtn, canFocus = !lower,
                     ) { play(ctx, listOf(item), 0) }
                     Spacer(Modifier.width(8.dp))
-                    if (resume != null) RoundAction("↺", "Desde el inicio", !lower) {
+                    if (resume != null) RoundAction(Icons.Filled.Refresh, "Desde el inicio", !lower) {
                         app.progress.update(item, 0, 1); play(ctx, listOf(item), 0)
                     }
                     val trailer = i?.trailer.orEmpty()
-                    if (trailer.isNotBlank()) RoundAction("▷", "Tráiler", !lower) {
+                    if (trailer.isNotBlank()) RoundAction(Icons.Filled.PlayArrow, "Tráiler", !lower) {
                         if (!openTrailer(ctx, trailer)) trailerMsg = "No hay ninguna app para abrir el tráiler (instala YouTube)."
                     }
-                    RoundAction(if (isFav) "★" else "☆", if (isFav) "En mi lista" else "Mi lista", !lower) { app.favorites.toggle(vod.toFav()) }
+                    RoundAction(if (isFav) Icons.Filled.Check else Icons.Filled.Add, if (isFav) "En mi lista" else "Mi lista", !lower) { app.favorites.toggle(vod.toFav()) }
                 }
                 val hint = trailerMsg ?: resume?.let { "Quedan ${hms(it.durationMs - it.positionMs)}" }
                 if (hint != null) T(hint, Type.small, MUTED, Modifier.padding(top = 8.dp))
@@ -560,14 +571,14 @@ fun SeriesDetail(app: GlassApp, series: SeriesItem) = CompositionLocalProvider(L
                         mainBtn, canFocus = !lower,
                     ) { target?.let { playEpisode(it) } }
                     Spacer(Modifier.width(8.dp))
-                    if (resumeEntry != null && resumeEp != null) RoundAction("↺", "Desde el inicio", !lower) {
+                    if (resumeEntry != null && resumeEp != null) RoundAction(Icons.Filled.Refresh, "Desde el inicio", !lower) {
                         app.progress.update(resumeEntry.item, 0, 1); playEpisode(resumeEp)
                     }
                     val trailer = si?.trailer.orEmpty()
-                    if (trailer.isNotBlank()) RoundAction("▷", "Tráiler", !lower) {
+                    if (trailer.isNotBlank()) RoundAction(Icons.Filled.PlayArrow, "Tráiler", !lower) {
                         if (!openTrailer(ctx, trailer)) trailerMsg = "No hay ninguna app para abrir el tráiler (instala YouTube)."
                     }
-                    RoundAction(if (isFav) "★" else "☆", if (isFav) "En mi lista" else "Mi lista", !lower) { app.favorites.toggle(series.toFav()) }
+                    RoundAction(if (isFav) Icons.Filled.Check else Icons.Filled.Add, if (isFav) "En mi lista" else "Mi lista", !lower) { app.favorites.toggle(series.toFav()) }
                 }
                 val hint = trailerMsg ?: if (resumeEp != null && resumeEntry != null) {
                     "T${resumeEp.season} · E${resumeEp.num} «${resumeEp.title}» · quedan ${hms(resumeEntry.durationMs - resumeEntry.positionMs)}"
@@ -659,9 +670,9 @@ private fun EpisodeCard(
         Focusable(onClick = onClick, shape = RoundedCornerShape(10.dp), scaleOnFocus = true) { focused ->
             Box(
                 Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-                    .border(if (focused) 3.dp else 0.dp, if (focused) Color.White else Color.Transparent, RoundedCornerShape(10.dp))
             ) {
                 Img(image, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
+                if (focused) GlassSheen(RoundedCornerShape(10.dp))
                 Box(Modifier.align(Alignment.TopStart).padding(7.dp).clip(RoundedCornerShape(5.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 7.dp, vertical = 2.dp)) {
                     T("${e.num}", Type.small.copy(fontWeight = FontWeight.Bold), Color.White)
                 }
@@ -683,8 +694,8 @@ private fun EpisodeCard(
             duration,
             prog?.let { "Quedan ${hms(it.durationMs - it.positionMs)}" } ?: badge,
         ).joinToString(" · ")
-        T(sub.ifBlank { " " }, Type.small.copy(fontSize = 11.sp), MUTED, Modifier.padding(top = 2.dp))
+        T(sub.ifBlank { " " }, Type.small, MUTED, Modifier.padding(top = 2.dp))
         // Siempre tres líneas reservadas: la fila no salta al recorrerla
-        T(synopsis.ifBlank { " " }, Type.small.copy(fontSize = 11.sp, lineHeight = 15.sp), Color(0xB3EBEBF5), Modifier.padding(top = 4.dp), maxLines = 3, minLines = 3)
+        T(synopsis.ifBlank { " " }, Type.small.copy(fontSize = 12.sp, lineHeight = 16.sp), Color(0xB3EBEBF5), Modifier.padding(top = 4.dp), maxLines = 3, minLines = 3)
     }
 }

@@ -1,6 +1,16 @@
 package com.glass.tv
 
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import com.glass.tv.ui.glassPanel
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.foundation.horizontalScroll
 import android.content.Context
 import android.content.Intent
@@ -77,8 +87,21 @@ import java.util.Date
 import java.util.Locale
 
 enum class Tab(val label: String) {
-    HOME("Inicio"), DISCOVER("Descubrir"), GUIDE("Guía"), LIVE("TV"), MOVIES("Películas"), SERIES("Series"),
-    FAVS("Favoritos"), REC("Grabaciones"), SETTINGS("Ajustes")
+    HOME("Inicio"), DISCOVER("Descubrir"), GUIDE("Guía"), LIVE("TV en directo"), MOVIES("Películas"), SERIES("Series"),
+    FAVS("Mi lista"), REC("Grabaciones"), SETTINGS("Ajustes");
+
+    /** Símbolo del menú lateral. */
+    val icon: androidx.compose.ui.graphics.vector.ImageVector get() = when (this) {
+        HOME -> com.glass.tv.ui.Symbols.Home
+        DISCOVER -> com.glass.tv.ui.Symbols.Explore
+        GUIDE -> com.glass.tv.ui.Symbols.Guide
+        LIVE -> com.glass.tv.ui.Symbols.Live
+        MOVIES -> com.glass.tv.ui.Symbols.Movie
+        SERIES -> com.glass.tv.ui.Symbols.Tv
+        FAVS -> com.glass.tv.ui.Symbols.Bookmark
+        REC -> com.glass.tv.ui.Symbols.Record
+        SETTINGS -> com.glass.tv.ui.Symbols.Gear
+    }
 }
 
 sealed interface Route {
@@ -224,127 +247,157 @@ private fun Root(app: GlassApp, onExit: () -> Unit) {
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun TabsScaffold(app: GlassApp, nav: Nav) {
     val p = LocalPalette.current
-    val firstTab = remember { FocusRequester() }
+    // Menú lateral de tvOS 18: oculto mientras ves contenido; se abre con ← desde el borde izquierdo o con Atrás.
+    var menuOpen by remember { mutableStateOf(false) }
+    val activeItem = remember { FocusRequester() }
+    val content = remember { FocusRequester() }
     val now by produceState(initialValue = clock()) {
         while (true) { delay(20_000); value = clock() }
     }
-    var tabsFocused by remember { mutableStateOf(true) }
-    // Al volver de una ficha, el foco lo recupera el elemento del catálogo; si no, va a las pestañas.
+    // La sección enfocada en el menú se abre sola tras un instante (al recorrerlo deprisa no se carga cada una)
+    var focusedTab by remember { mutableStateOf<Tab?>(null) }
+    LaunchedEffect(focusedTab) {
+        val t = focusedTab ?: return@LaunchedEffect
+        if (t != nav.tab) { delay(TAB_SWITCH_DELAY_MS); nav.tab = t }
+    }
+    fun closeMenu() {
+        focusedTab?.let { nav.tab = it }
+        menuOpen = false
+    }
+    // Al cerrar el menú (o al volver de una ficha) el foco entra en el contenido
+    LaunchedEffect(menuOpen) {
+        if (menuOpen) { delay(30); try { activeItem.requestFocus() } catch (_: Exception) { } }
+        else if (nav.returnKey == null) {
+            delay(80)
+            try { content.requestFocus() } catch (_: Exception) { }
+        }
+    }
     LaunchedEffect(Unit) {
         if (nav.returnKey != null) {
-            delay(1500) // si el elemento ya no está (lista actualizada…), el foco vuelve a las pestañas
+            delay(1500) // si el elemento ya no está (lista actualizada…), el foco va al contenido
             if (nav.returnKey == null) return@LaunchedEffect
             nav.returnKey = null
+            try { content.requestFocus() } catch (_: Exception) { }
         }
-        try { firstTab.requestFocus() } catch (_: Exception) { }
     }
-    // Atrás desde el contenido sube primero a la barra de pestañas; desde ahí, a Inicio y luego sale.
-    BackHandler(enabled = !tabsFocused) {
-        try { firstTab.requestFocus() } catch (_: Exception) { }
-    }
+    // Atrás desde el contenido abre el menú; con el menú abierto, el Atrás general (Inicio y luego salir)
+    BackHandler(enabled = !menuOpen) { menuOpen = true }
+    BackHandler(enabled = menuOpen && nav.tab != Tab.HOME) { focusedTab = Tab.HOME; nav.tab = Tab.HOME }
 
-    // Inicio va a pantalla completa con el menú encima (fino y siempre oscuro); el resto, debajo de la cabecera.
     val home = nav.tab == Tab.HOME
     val guide = nav.tab == Tab.GUIDE
     val discover = nav.tab == Tab.DISCOVER
-    // Inicio, Guía y Descubrir: menú fino sobre fondo oscuro
-    val slim = home || guide || discover
-    val homeFocus = remember { com.glass.tv.ui.screens.HomeFocus(firstTab) }
+    // Inicio, Guía y Descubrir: pantalla completa y siempre oscuras
+    val fullBleed = home || guide || discover
+    val homeFocus = remember { com.glass.tv.ui.screens.HomeFocus(activeItem) }
+    val shift by androidx.compose.animation.core.animateDpAsState(if (menuOpen) MENU_W - 24.dp else 0.dp, label = "menu")
+    val dim by androidx.compose.animation.core.animateFloatAsState(if (menuOpen) 0.5f else 0f, label = "oscurecer")
 
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
                 .fillMaxSize()
-                .then(
-                    when {
-                        // Inicio y Descubrir van a pantalla completa, con el menú encima de la imagen
-                        home || discover -> Modifier
-                        guide -> Modifier.padding(top = HEADER_H)
-                        else -> Modifier.padding(start = 44.dp, end = 44.dp, top = HEADER_H)
-                    }
-                )
+                .offset(x = shift)
+                .focusRequester(content)
+                .focusRestorer()
+                .focusGroup()
         ) {
-            // Pantallas normales: título grande bajo el menú, como en la Guía, y el contenido debajo
-            if (!slim) Column(Modifier.fillMaxSize()) {
-                T(nav.tab.label, Type.title.copy(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, letterSpacing = (-0.6).sp), p.text, Modifier.padding(top = 8.dp))
-                T(tabHint(nav.tab), Type.small.copy(fontSize = 12.sp), p.muted, Modifier.padding(top = 4.dp, bottom = 16.dp))
-                Box(Modifier.weight(1f).fillMaxWidth()) { TabContent(app, nav, homeFocus) }
-            } else TabContent(app, nav, homeFocus)
+            Box(Modifier.fillMaxSize().then(when { guide -> Modifier.padding(top = 28.dp); fullBleed -> Modifier; else -> Modifier.padding(start = 64.dp, end = 48.dp, top = 28.dp) })) {
+                if (!fullBleed) Column(Modifier.fillMaxSize()) {
+                    T(nav.tab.label, Type.title.copy(fontSize = 34.sp, lineHeight = 40.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, letterSpacing = (-0.8).sp), p.text)
+                    T(tabHint(nav.tab), Type.small, p.muted, Modifier.padding(top = 4.dp, bottom = 16.dp))
+                    Box(Modifier.weight(1f).fillMaxWidth()) { TabContent(app, nav, homeFocus) }
+                } else TabContent(app, nav, homeFocus)
+            }
+            if (dim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
         }
 
-        // El menú es siempre el mismo, en el mismo sitio y con el mismo tamaño: al cambiar de pestaña solo cambia
-        // lo de debajo. En las pantallas oscuras (Inicio, Guía, Descubrir) usa los colores del tema oscuro.
-        androidx.compose.runtime.CompositionLocalProvider(LocalPalette provides if (slim) com.glass.tv.ui.OledPalette else p) {
-            val hp = LocalPalette.current
-            val mini = MiniPlayer.item
-            // Barra de pestañas de tvOS: una cápsula de cristal flotante, centrada arriba
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(HEADER_H)
-                    .padding(start = 44.dp, end = 48.dp, top = 14.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                if (mini == null) Spacer(Modifier.width(CLOCK_W))
-                Spacer(Modifier.weight(1f))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .weight(8f, fill = false)
-                        .glass(androidx.compose.foundation.shape.RoundedCornerShape(50))
-                        .padding(4.dp)
-                        // Solo se desplaza si no cabe (por ejemplo, con la ventana de un canal abierta)
-                        .horizontalScroll(androidx.compose.foundation.rememberScrollState())
-                        .onFocusChanged { tabsFocused = it.hasFocus }
-                        // Al subir desde el contenido se vuelve a la pestaña en la que estás, no a la más cercana
-                        .focusProperties { enter = { firstTab } }
-                        .focusGroup(),
-                ) {
-                    Tab.entries.forEach { t ->
-                        val active = t == nav.tab
-                        Focusable(
-                            onClick = { nav.tab = t },
-                            onFocused = { nav.tab = t },
-                            focusRequester = if (active) firstTab else null,
-                            liftOnFocus = 1.06f,
-                            // En Inicio, ↓ desde el menú va primero a los puntos de las novedades (← → las cambian)
-                            modifier = Modifier.onPreviewKeyEvent { e ->
-                                if (e.key != Key.DirectionDown || nav.tab != Tab.HOME || !homeFocus.dotsReady) false
-                                else {
-                                    if (e.type == KeyEventType.KeyDown) try { homeFocus.dots.requestFocus() } catch (_: Exception) { }
-                                    true
-                                }
-                            },
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
-                        ) { focused ->
-                            Box(
-                                Modifier
-                                    .background(if (focused) hp.focusBg else if (active) hp.text.copy(alpha = 0.16f) else Color.Transparent)
-                                    .padding(horizontal = 14.dp, vertical = 7.dp)
-                            ) {
-                                T(
-                                    t.label, Type.tab.copy(fontSize = 13.sp, fontWeight = if (active || focused) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
-                                    if (focused) hp.focusText else if (active) hp.text else hp.text.copy(alpha = 0.66f),
-                                )
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                Row(
-                    Modifier.then(if (mini == null) Modifier.width(CLOCK_W) else Modifier).padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
-                ) {
-                    mini?.let { m ->
-                        val ctx = androidx.compose.ui.platform.LocalContext.current
-                        TvButton("⛶ ${m.title}", onClick = { MiniPlayer.expand(ctx) })
-                        TvButton("✕", onClick = { MiniPlayer.stop() })
-                    }
-                    T(now, Type.label.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), hp.text)
-                }
+        // Borde izquierdo invisible (fuera del contenido, para que al volver no se restaure aquí el foco):
+        // al pulsar ← en lo primero de una fila, el foco llega aquí y abre el menú
+        if (!menuOpen) Box(
+            Modifier.align(Alignment.CenterStart).width(2.dp).fillMaxHeight()
+                .onFocusChanged { if (it.isFocused) menuOpen = true }
+                .focusable()
+        )
+
+        // Ventana de un canal: controles arriba a la derecha
+        MiniPlayer.item?.let { m ->
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            Row(Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 32.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton(m.title, onClick = { MiniPlayer.expand(ctx) }, icon = androidx.compose.material.icons.Icons.Filled.PlayArrow)
+                TvButton("", onClick = { MiniPlayer.stop() }, icon = androidx.compose.material.icons.Icons.Filled.Close, description = "Cerrar la ventana")
             }
+        }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = menuOpen,
+            enter = androidx.compose.animation.slideInHorizontally { -it / 3 } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutHorizontally { -it / 3 } + androidx.compose.animation.fadeOut(),
+        ) {
+            CompositionLocalProvider(LocalPalette provides com.glass.tv.ui.OledPalette) {
+                SideMenu(
+                    nav = nav, now = now, activeItem = activeItem,
+                    onFocusTab = { focusedTab = it },
+                    onPick = { t -> focusedTab = t; nav.tab = t; menuOpen = false },
+                    onClose = { closeMenu() },
+                )
+            }
+        }
+    }
+}
+
+/** Panel de cristal del menú lateral, con las secciones en el orden de siempre y Ajustes abajo. */
+@Composable
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+private fun SideMenu(nav: Nav, now: String, activeItem: FocusRequester, onFocusTab: (Tab) -> Unit, onPick: (Tab) -> Unit, onClose: () -> Unit) {
+    val p = LocalPalette.current
+    Column(
+        Modifier
+            .padding(16.dp)
+            .width(MENU_W)
+            .fillMaxHeight()
+            .glassPanel(androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
+            .padding(horizontal = 12.dp, vertical = 18.dp)
+            // → cierra el menú y vuelve al contenido; el foco no sale del panel por arriba ni por abajo
+            .onPreviewKeyEvent { e ->
+                if (e.key == Key.DirectionRight) { if (e.type == KeyEventType.KeyDown) onClose(); true } else false
+            }
+            .focusProperties { enter = { activeItem } }
+            .focusGroup(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            T("Glass", Type.heading, p.text, Modifier.weight(1f))
+            T(now, Type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), p.muted)
+        }
+        val main = Tab.entries.filter { it != Tab.SETTINGS }
+        main.forEach { t -> MenuItem(t, nav.tab == t, activeItem.takeIf { nav.tab == t }, onFocusTab, onPick) }
+        Spacer(Modifier.weight(1f))
+        MenuItem(Tab.SETTINGS, nav.tab == Tab.SETTINGS, activeItem.takeIf { nav.tab == Tab.SETTINGS }, onFocusTab, onPick)
+    }
+}
+
+@Composable
+private fun MenuItem(t: Tab, active: Boolean, fr: FocusRequester?, onFocusTab: (Tab) -> Unit, onPick: (Tab) -> Unit) {
+    val p = LocalPalette.current
+    Focusable(
+        onClick = { onPick(t) },
+        onFocused = { onFocusTab(t) },
+        focusRequester = fr,
+        liftOnFocus = 1.04f,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) { focused ->
+        val fg = if (focused) p.focusText else if (active) p.text else p.text.copy(alpha = 0.8f)
+        Row(
+            Modifier.fillMaxWidth()
+                .background(if (focused) p.focusBg else if (active) p.text.copy(alpha = 0.14f) else Color.Transparent)
+                .padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            androidx.compose.material3.Icon(t.icon, contentDescription = null, tint = fg, modifier = Modifier.size(20.dp))
+            T(t.label, Type.label.copy(fontSize = 15.sp, fontWeight = if (active || focused) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium), fg)
         }
     }
 }
@@ -375,10 +428,10 @@ private fun tabHint(t: Tab): String = when (t) {
     else -> ""
 }
 
-/** Alto fijo del menú de pestañas: el contenido empieza siempre a la misma altura. */
-private val HEADER_H = 64.dp
+/** Espera antes de abrir la sección enfocada en el menú. */
+private const val TAB_SWITCH_DELAY_MS = 220L
 
-/** Hueco del reloj, también a la izquierda para que la barra quede centrada. */
-private val CLOCK_W = 60.dp
+/** Ancho del menú lateral. */
+private val MENU_W = 248.dp
 
 private fun clock(): String = SimpleDateFormat("HH:mm", Locale("es")).format(Date())

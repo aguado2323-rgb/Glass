@@ -48,8 +48,10 @@ class Backup(private val app: GlassApp) {
 
     fun lastBackup(): Long = appFile.takeIf { it.exists() }?.lastModified() ?: 0L
 
-    suspend fun export(): BackupResult = withContext(Dispatchers.IO) {
-        try {
+    /** La copia como texto, sin guardarla (para descargarla desde el móvil o el PC). */
+    fun exportText(): String = json.encodeToString(buildData())
+
+    private fun buildData(): BackupData {
             val prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE).all.mapNotNull { (k, v) ->
                 when (v) {
                     is String -> k to "s:$v"
@@ -69,6 +71,12 @@ class Backup(private val app: GlassApp) {
                 recordings = app.recordings.items.filter { it.status == Recording.STATUS_SCHEDULED },
                 settings = prefs,
             )
+            return data
+    }
+
+    suspend fun export(): BackupResult = withContext(Dispatchers.IO) {
+        try {
+            val data = buildData()
             val text = json.encodeToString(data)
             appFile.parentFile?.mkdirs()
             appFile.writeText(text)
@@ -140,8 +148,24 @@ class Backup(private val app: GlassApp) {
 
     /** Lee la copia y devuelve un resumen, sin aplicar nada todavía. */
     suspend fun peek(): BackupData? = withContext(Dispatchers.IO) {
-        try { readAny()?.let { json.decodeFromString<BackupData>(it) } } catch (e: Exception) { null }
+        try { (readAny() ?: readVisor())?.let { json.decodeFromString<BackupData>(it) } } catch (e: Exception) { null }
     }
+
+    /**
+     * Copia de Visor dejada en Descargas. Glass y Visor guardan lo mismo con el mismo formato, así que se restaura
+     * tal cual. En Android 10 o más el sistema no deja leer archivos de otra app: ahí se usa la página del móvil o el PC.
+     */
+    private fun readVisor(): String? = try {
+        @Suppress("DEPRECATION")
+        val f = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), VISOR_FILE_NAME)
+        if (f.exists() && f.length() <= MAX_IMPORT_BYTES) f.readText() else null
+    } catch (_: Exception) { null }
+
+    /** Lee una copia de Glass o de Visor recibida como texto; null si no lo es. */
+    fun parse(text: String): BackupData? = try {
+        if (text.length > MAX_IMPORT_BYTES) null
+        else json.decodeFromString<BackupData>(text).takeIf { it.created > 0 }
+    } catch (e: Exception) { null }
 
     /** Aplica la copia. Después hay que reiniciar la app para que los ajustes se carguen. */
     suspend fun restore(data: BackupData): BackupResult {
@@ -189,6 +213,9 @@ class Backup(private val app: GlassApp) {
 
     companion object {
         const val FILE_NAME = "glass-backup.json"
+        /** Nombre de la copia que hace Visor: el formato es el mismo. */
+        const val VISOR_FILE_NAME = "visor-backup.json"
+        private const val MAX_IMPORT_BYTES = 4L * 1024 * 1024
         private const val MAX_ITEMS = 2000
         private const val MAX_BYTES = 8 * 1024 * 1024
         private const val MAX_REC_MS = 24 * 60 * 60_000L

@@ -256,7 +256,7 @@ fun GuideScreen(app: GlassApp) = androidx.compose.runtime.CompositionLocalProvid
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFF453A)))
-                    T("  ${ch.name} · en directo", Type.small.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold), Color.White)
+                    T("  ${ch.name} · en directo", Type.small.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold), Color.White)
                 }
             }
         }

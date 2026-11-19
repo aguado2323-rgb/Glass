@@ -1,5 +1,12 @@
 package com.glass.tv.ui.screens
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
@@ -99,6 +106,7 @@ import com.glass.tv.debrid.DeviceCode
 import com.glass.tv.play
 import com.glass.tv.ui.Empty
 import com.glass.tv.ui.Focusable
+import com.glass.tv.ui.GlassSheen
 import com.glass.tv.ui.Img
 import com.glass.tv.ui.ListRow
 import com.glass.tv.ui.LocalPalette
@@ -243,15 +251,15 @@ fun AddonDetail(app: GlassApp, nav: Nav, m: MetaPreview) = CompositionLocalProvi
                     }
                     PrimaryAction(label, resumeEntry?.let { it.positionMs.toFloat() / it.durationMs }, mainBtn, canFocus = !lower) { watchMain() }
                     Spacer(Modifier.width(8.dp))
-                    RoundAction("☰", "Fuentes", !lower) { watchMain(ask = true) }
-                    if (resumeEntry != null) RoundAction("↺", "Desde el inicio", !lower) {
+                    RoundAction(Icons.Filled.Menu, "Fuentes", !lower) { watchMain(ask = true) }
+                    if (resumeEntry != null) RoundAction(Icons.Filled.Refresh, "Desde el inicio", !lower) {
                         app.progress.update(resumeEntry.item, 0, 1); watchMain()
                     }
                     val trailer = meta?.trailer.orEmpty()
-                    if (trailer.isNotBlank()) RoundAction("▷", "Tráiler", !lower) {
+                    if (trailer.isNotBlank()) RoundAction(Icons.Filled.PlayArrow, "Tráiler", !lower) {
                         if (!openTrailer(ctx, trailer)) msg = "No hay ninguna app para abrir el tráiler (instala YouTube)."
                     }
-                    RoundAction(if (isFav) "★" else "☆", if (isFav) "En mi lista" else "Mi lista", !lower) {
+                    RoundAction(if (isFav) Icons.Filled.Check else Icons.Filled.Add, if (isFav) "En mi lista" else "Mi lista", !lower) {
                         app.favorites.toggle(base.copy(name = title, poster = poster).toFav())
                     }
                 }
@@ -340,9 +348,9 @@ private fun EpisodeTile(
         Focusable(onClick = onClick, onMenu = onMenu, shape = RoundedCornerShape(10.dp), scaleOnFocus = true) { focused ->
             Box(
                 Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-                    .border(if (focused) 3.dp else 0.dp, if (focused) Color.White else Color.Transparent, RoundedCornerShape(10.dp))
             ) {
                 Img(image, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
+                if (focused) GlassSheen(RoundedCornerShape(10.dp))
                 Box(Modifier.align(Alignment.TopStart).padding(7.dp).clip(RoundedCornerShape(5.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 7.dp, vertical = 2.dp)) {
                     T("$number", Type.small.copy(fontWeight = FontWeight.Bold), Color.White)
                 }
@@ -361,9 +369,9 @@ private fun EpisodeTile(
         Spacer(Modifier.height(10.dp))
         T(name, Type.label.copy(fontSize = 14.sp), Color.White)
         val sub = listOfNotNull(duration, left ?: if (watched) "Visto" else null).joinToString(" · ")
-        T(sub.ifBlank { " " }, Type.small.copy(fontSize = 11.sp), MUTED, Modifier.padding(top = 2.dp))
+        T(sub.ifBlank { " " }, Type.small, MUTED, Modifier.padding(top = 2.dp))
         // Siempre tres líneas reservadas: la fila no salta al recorrerla
-        T(synopsis.ifBlank { " " }, Type.small.copy(fontSize = 11.sp, lineHeight = 15.sp), Color(0xB3EBEBF5), Modifier.padding(top = 4.dp), maxLines = 3, minLines = 3)
+        T(synopsis.ifBlank { " " }, Type.small.copy(fontSize = 12.sp, lineHeight = 16.sp), Color(0xB3EBEBF5), Modifier.padding(top = 4.dp), maxLines = 3, minLines = 3)
     }
 }
 
